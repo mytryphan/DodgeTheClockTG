@@ -74,7 +74,7 @@ function create() {
     // Timed event to recalculate the maximum number of blocks (random 1 to 5) every 5 seconds
     this.time.addEvent({
         delay: 5000,
-        callback: () => { maxBlocks = Phaser.Math.Between(1, 5); },
+        callback: () => { maxBlocks = Phaser.Math.Between(1, 8); },
         loop: true
     });
 }
@@ -132,7 +132,7 @@ function spawnBlock() {
             'block'
         ).setOrigin(0.5).setDisplaySize(40, 40);
         // Assign a random falling speed between 3 and 10
-        newBlock.speed = Phaser.Math.Between(3, 10);
+        newBlock.speed = Phaser.Math.Between(5, 20);
         blocks.add(newBlock);
     }
 }
