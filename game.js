@@ -5,7 +5,7 @@ const config = {
     type: Phaser.AUTO,
     width: window.innerWidth,
     height: window.innerHeight,
-    parent: 'game-container', // ID of the HTML element where the game renders
+    parent: 'game-container', // HTML element id where the game will render
     scale: {
       mode: Phaser.Scale.FIT,
       autoCenter: Phaser.Scale.CENTER_BOTH,
@@ -25,8 +25,8 @@ const config = {
   let nextSpeedIncreaseScore;      // Score threshold for next speed increase
   let nextMaxBlocksIncreaseScore;  // Score threshold for next increase in maximum blocks
   
-  // New global player speed variable
-  let playerSpeed = 6; // Initial player speed (in pixels per frame at 60 FPS)
+  // Global player speed variable
+  let playerSpeed = 6; // Initial player speed (pixels per frame at 60 FPS)
   
   // Mode settings object
   const modeSettings = {
@@ -83,7 +83,7 @@ const config = {
       .setOrigin(0)
       .setDisplaySize(config.width, config.height);
       
-    // Show mode selection UI positioned at one-fourth of screen height
+    // Show mode selection UI (positioned at one-fourth of the screen height)
     createModeSelectionUI(this);
   }
   
@@ -155,7 +155,7 @@ const config = {
   // MODE SELECTION UI & GAME START FUNCTIONS
   // -------------------------
   function createModeSelectionUI(scene) {
-    // Get Telegram user info if available
+    // Get Telegram user info if available; default to "Guest"
     let username = "Guest";
     if (
       window.Telegram &&
@@ -199,7 +199,7 @@ const config = {
       padding: { x: 10, y: 5 }
     }).setOrigin(0.5).setInteractive();
     
-    // Highscore text now appears below the mode buttons
+    // Highscore text appears below the mode buttons (y = 120)
     let highscoreText = scene.add.text(0, 120, `Highscores:\nNormal: ${highscoreNormal}   Asian: ${highscoreAsian}`, {
       fontSize: '20px',
       fill: '#fff',
@@ -230,6 +230,10 @@ const config = {
   
   function startGame(scene) {
     gameStarted = true;
+    
+    // If an old player or scoreText exists, destroy them
+    if (player) { player.destroy(); player = null; }
+    if (scoreText) { scoreText.destroy(); scoreText = null; }
     
     // Create player
     player = scene.add.image(config.width / 2, config.height - 80, 'player')
