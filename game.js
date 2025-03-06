@@ -24,6 +24,7 @@ const config = {
   let speedMultiplier = 1;
   let nextSpeedIncreaseScore;
   let nextMaxBlocksIncreaseScore;
+  
   let playerSpeed = 6;
   
   const modeSettings = {
@@ -58,63 +59,35 @@ const config = {
   let spawnTimer = null;
   let gameOverShown = false;
   
-  // Global variable for the change name button (placed at the bottom)
+  // Global variable for the "Change Name" button placed at the very bottom
   let changeNameButton;
   
   // -------------------------
   // FIREBASE LEADERBOARD & USER FUNCTIONS (Firestore)
   // -------------------------
-  
-  // Register a unique name in "users" collection.
   async function registerUniqueName(name) {
     const docRef = db.collection("users").doc(name);
     const doc = await docRef.get();
-    if (doc.exists) {
-      return false;
-    } else {
-      await docRef.set({ registeredAt: firebase.firestore.FieldValue.serverTimestamp() });
-      return true;
-    }
+    return !doc.exists;
   }
   
-  // Prompt for a unique name, even if one is stored locally.
   async function promptForUniqueName() {
     let name = prompt("Please enter your name:");
     if (!name) name = "Guest";
     const unique = await registerUniqueName(name);
     if (!unique) {
-      alert("This name is already in use. Please choose a different name.");
+      alert(`The name "${name}" is already in use. Please choose a different name.`);
       return await promptForUniqueName();
     }
     return name;
   }
   
-  // Check if the stored name is still unique globally; if not, prompt again.
-  async function validateStoredName() {
-    let storedName = localStorage.getItem("playerName");
-    if (storedName) {
-      const unique = await registerUniqueName(storedName);
-      if (!unique) {
-        // If not unique, prompt for a new one.
-        storedName = await promptForUniqueName();
-        localStorage.setItem("playerName", storedName);
-      }
-      return storedName;
-    } else {
-      const newName = await promptForUniqueName();
-      localStorage.setItem("playerName", newName);
-      return newName;
-    }
-  }
-  
-  // Submit score to Firestore using a composite document ID (mode_name) to enforce one entry per name per mode.
   async function submitScoreFirestore(mode, name, score) {
     const docId = `${mode}_${name}`;
     const docRef = db.collection("scores").doc(docId);
     try {
       const doc = await docRef.get();
       if (doc.exists) {
-        // Update only if new score is higher.
         if (score > doc.data().score) {
           await docRef.update({
             score: score,
@@ -138,7 +111,6 @@ const config = {
     }
   }
   
-  // Retrieve top 10 scores for a given mode.
   async function getGlobalLeaderboard(mode) {
     try {
       const querySnapshot = await db.collection("scores")
@@ -254,46 +226,52 @@ const config = {
   // MODE SELECTION UI & GAME START FUNCTIONS
   // -------------------------
   async function createModeSelectionUI(scene) {
-    // Validate stored name globally. If invalid, prompt again.
-    let playerName = await validateStoredName();
-    localStorage.setItem("playerName", playerName);
+    // Check for stored name; if exists, use it; if not, prompt once.
+    let storedName = localStorage.getItem("playerName");
+    if (!storedName) {
+      storedName = await promptForUniqueName();
+      localStorage.setItem("playerName", storedName);
+    }
+    const currentPlayerName = storedName;
     
+    // Destroy any previous UI elements
     if (gameOverContainer) { gameOverContainer.destroy(); gameOverContainer = null; }
     if (modeContainer) { modeContainer.destroy(); modeContainer = null; }
     
     let personalHighscoreNormal = localStorage.getItem('highscore_normal') || 0;
     let personalHighscoreAsian = localStorage.getItem('highscore_asian') || 0;
     
-    modeContainer = scene.add.container(config.width / 2, config.height * 0.3);
+    // Position container at 40% of screen height for a better fit.
+    modeContainer = scene.add.container(config.width / 2, config.height * 0.4);
     modeContainer.setDepth(100);
     
-    let playerNameText = scene.add.text(0, -100, `Hello, ${playerName}!`, {
+    let playerNameText = scene.add.text(0, -80, `Hello, ${currentPlayerName}!`, {
       fontSize: '20px',
       fill: '#fff',
       align: 'center'
     }).setOrigin(0.5);
     
-    let modeTitleText = scene.add.text(0, -60, "Select Game Mode", {
+    let modeTitleText = scene.add.text(0, -40, "Select Game Mode", {
       fontSize: '24px',
       fill: '#fff',
       align: 'center'
     }).setOrigin(0.5);
     
-    let normalButton = scene.add.text(0, -20, "Normal Mode", {
+    let normalButton = scene.add.text(0, 0, "Normal Mode", {
       fontSize: '24px',
       fill: '#fff',
       backgroundColor: '#000',
       padding: { x: 8, y: 4 }
     }).setOrigin(0.5).setInteractive();
     
-    let asianButton = scene.add.text(0, 20, "Asian Normal Mode", {
+    let asianButton = scene.add.text(0, 40, "Asian Normal Mode", {
       fontSize: '24px',
       fill: '#fff',
       backgroundColor: '#000',
       padding: { x: 8, y: 4 }
     }).setOrigin(0.5).setInteractive();
     
-    let personalHighscoreText = scene.add.text(0, 50, 
+    let personalHighscoreText = scene.add.text(0, 80, 
       `Your Highscore:\nNormal: ${personalHighscoreNormal}   Asian: ${personalHighscoreAsian}`, {
       fontSize: '14px',
       fill: '#fff',
@@ -303,21 +281,21 @@ const config = {
     let leaderboardNormal = await getGlobalLeaderboard("normal");
     let leaderboardAsian = await getGlobalLeaderboard("asian");
     
-    let leaderboardNormalText = scene.add.text(-config.width / 4, 80, 
+    let leaderboardNormalText = scene.add.text(-config.width / 4, 100, 
       "Normal:\n" + formatLeaderboardFromData(leaderboardNormal), {
       fontSize: '14px',
       fill: '#fff',
       align: 'center'
     }).setOrigin(0.5, 0);
     
-    let leaderboardAsianText = scene.add.text(config.width / 4, 80, 
+    let leaderboardAsianText = scene.add.text(config.width / 4, 100, 
       "Asian:\n" + formatLeaderboardFromData(leaderboardAsian), {
       fontSize: '14px',
       fill: '#fff',
       align: 'center'
     }).setOrigin(0.5, 0);
     
-    // Remove change name button from the container and add it as a separate element at the bottom
+    // Place the Change Name button outside the container at the very bottom.
     if (changeNameButton) { changeNameButton.destroy(); }
     changeNameButton = scene.add.text(config.width / 2, config.height - 30, "Change Name", {
       fontSize: '14px',
@@ -461,8 +439,8 @@ const config = {
     gameOverContainer.setVisible(true);
     gameOverContainer.getAt(2).setText('Score: ' + score);
     
-    let playerName = localStorage.getItem("playerName") || "Guest";
-    submitScoreFirestore(selectedMode, playerName, score);
+    let currentName = localStorage.getItem("playerName") || "Guest";
+    submitScoreFirestore(selectedMode, currentName, score);
     
     if (selectedMode === "normal") {
       let hs = localStorage.getItem('highscore_normal') || 0;
