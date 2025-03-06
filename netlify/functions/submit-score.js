@@ -1,4 +1,3 @@
-// netlify/functions/submit-score.js
 const faunadb = require('faunadb');
 const q = faunadb.query;
 
@@ -16,7 +15,6 @@ exports.handler = async (event, context) => {
     if (!mode || !name || typeof score !== "number") {
       return { statusCode: 400, body: "Missing or invalid parameters" };
     }
-    // Create a new document in the "scores" collection
     const result = await client.query(
       q.Create(
         q.Collection("scores"),
@@ -28,7 +26,7 @@ exports.handler = async (event, context) => {
       body: JSON.stringify({ success: true, result })
     };
   } catch (err) {
-    console.error(err);
+    console.error("Error submitting score:", err);
     return { statusCode: 500, body: "Server Error" };
   }
 };
