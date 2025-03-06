@@ -60,11 +60,11 @@ const config = {
   let spawnTimer = null;
   let gameOverShown = false;
   
-  // New: Groups for lasers and shooting control
+  // New groups for lasers and shooting control
   let lasers;
   let canShoot = false; // becomes true on pointerup
   
-  // Laser ammo: starts at 0; gain 1 per every 5 points.
+  // Laser ammo: starts at 0; gain 1 bullet per every 5 points.
   let laserAmmo = 0;
   let lastScoreCheckpoint = 0;
   let ammoText; // UI display for ammo
@@ -145,7 +145,7 @@ const config = {
     this.load.image('player', 'assets/player.png');
     this.load.image('block', 'assets/block.png');
     this.load.image('star', 'assets/star.png');
-    // Do not load a PNG for laser; we'll generate it as a vector graphic.
+    // We will create the laser texture via vector graphics—do not load a PNG.
     this.load.image('gameOverBg', 'assets/game_over_bg.png');
     this.load.image('restartButton', 'assets/restart_button.png');
   }
@@ -159,14 +159,14 @@ const config = {
       .setDisplaySize(config.width, config.height);
     
     // Generate red laser textures using vector graphics.
-    // Create glow texture.
+    // Create a glow texture (larger, semi-transparent)
     let laserGlowGraphics = this.add.graphics();
     laserGlowGraphics.fillStyle(0xff0000, 0.5);
     laserGlowGraphics.fillRect(0, 0, 14, 34);
     laserGlowGraphics.generateTexture('laserGlow', 14, 34);
     laserGlowGraphics.destroy();
     
-    // Create core texture.
+    // Create a core texture (solid red, 10x30)
     let laserCoreGraphics = this.add.graphics();
     laserCoreGraphics.fillStyle(0xff0000, 1);
     laserCoreGraphics.fillRect(0, 0, 10, 30);
@@ -177,10 +177,10 @@ const config = {
     blocks = this.add.group();
     lasers = this.add.group();
     
-    // Create an ammo display at top-right.
+    // Create an ammo display at the top-right.
     ammoText = this.add.text(config.width - 150, 10, 'Ammo: 0', { fontSize: '20px', fill: '#fff' });
     
-    // Show tutorial overlay for laser shooting on first launch.
+    // Show tutorial overlay for laser shooting only on first launch.
     if (!localStorage.getItem("tutorialShown")) {
       let tutorialText = this.add.text(config.width / 2, config.height / 2, "Tap to shoot laser!\nLift finger then tap again to fire.", {
         fontSize: '24px',
@@ -201,7 +201,6 @@ const config = {
       canShoot = true;
     });
     this.input.on('pointerdown', (pointer) => {
-      // Check if at least 1 second has passed since the last shot.
       if (canShoot && laserAmmo > 0 && Date.now() - lastLaserShotTime >= 1000) {
         shootLaser.call(this);
         lastLaserShotTime = Date.now();
@@ -239,7 +238,6 @@ const config = {
     
     // Update lasers: move upward and check for collisions with blocks.
     lasers.getChildren().forEach(function(laserContainer) {
-      // Move the entire container.
       laserContainer.y -= laserContainer.speed * dt;
       if (laserContainer.y < 0) {
         laserContainer.destroy();
@@ -249,7 +247,7 @@ const config = {
           if (obstacle.type === "block" && checkCollision(coreBounds, obstacle.getBounds())) {
             obstacle.destroy();
             laserContainer.destroy();
-            score += 5; // Bonus for hitting a block with a laser.
+            score += 5; // Bonus for hitting a block.
             scoreText.setText('Score: ' + score);
           }
         });
@@ -259,6 +257,7 @@ const config = {
     // Blocks movement & collision; star collection gives 10 points.
     blocks.getChildren().forEach(function(obstacle) {
       obstacle.speed = obstacle.baseSpeed * speedMultiplier;
+      // Spawn obstacles 30% lower than the top.
       obstacle.y += obstacle.speed * dt;
       
       if (checkCollision(player.getBounds(), obstacle.getBounds())) {
@@ -326,7 +325,7 @@ const config = {
     laserContainer.add([glow, core]);
     // Store a reference to the core for collision detection.
     laserContainer.core = core;
-    // Set laser speed.
+    // Set the laser container's speed.
     laserContainer.speed = 300;
     lasers.add(laserContainer);
   }
@@ -490,19 +489,21 @@ const config = {
   function spawnBlock() {
     if (gameOver) return;
     if (blocks.getLength() < maxBlocks) {
+      // Spawn obstacles at 30% of screen height.
+      let spawnY = config.height * 0.3;
       let isStar = Math.random() < 0.10;
       let obstacle;
       if (isStar) {
         obstacle = this.add.image(
           Phaser.Math.Between(40, config.width - 40),
-          0,
+          spawnY,
           'star'
         ).setOrigin(0.5).setDisplaySize(40, 40);
         obstacle.type = "star";
       } else {
         obstacle = this.add.image(
           Phaser.Math.Between(40, config.width - 40),
-          0,
+          spawnY,
           'block'
         ).setOrigin(0.5).setDisplaySize(40, 40);
         obstacle.type = "block";
