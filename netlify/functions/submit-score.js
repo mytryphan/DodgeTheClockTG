@@ -11,19 +11,22 @@ exports.handler = async (event, context) => {
   }
   try {
     const data = JSON.parse(event.body);
+    console.log("Received data:", data);  // Debug log
     const { mode, name, score } = data;
     if (!mode || !name || typeof score !== "number") {
+      console.error("Invalid parameters", data);
       return { statusCode: 400, body: "Missing or invalid parameters" };
     }
     const result = await client.query(
       q.Create(q.Collection("scores"), { data: { mode, name, score } })
     );
+    console.log("FaunaDB result:", result);
     return {
       statusCode: 200,
       body: JSON.stringify({ success: true, result })
     };
   } catch (err) {
-    console.error("Error in submit-score:", err);
+    console.error("Error in submit-score function:", err);
     return { statusCode: 500, body: "Server Error" };
   }
 };
