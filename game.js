@@ -64,10 +64,13 @@ const config = {
   let lasers;
   let canShoot = false; // becomes true on pointerup
   
-  // Laser ammo variables: starts at 0; gain 1 per every 5 points.
+  // Laser ammo: starts at 0; gain 1 per every 5 points.
   let laserAmmo = 0;
   let lastScoreCheckpoint = 0;
   let ammoText; // UI display for ammo
+  
+  // Global variable to limit laser fire rate (once per second)
+  let lastLaserShotTime = 0;
   
   // Global variable for the "Change Name" button
   let changeNameButton;
@@ -142,7 +145,7 @@ const config = {
     this.load.image('player', 'assets/player.png');
     this.load.image('block', 'assets/block.png');
     this.load.image('star', 'assets/star.png');
-    // Do not load a PNG for laser; we'll create it via vector graphics.
+    // Do not load a PNG for laser; we'll generate it as a vector graphic.
     this.load.image('gameOverBg', 'assets/game_over_bg.png');
     this.load.image('restartButton', 'assets/restart_button.png');
   }
@@ -156,15 +159,14 @@ const config = {
       .setDisplaySize(config.width, config.height);
     
     // Generate red laser textures using vector graphics.
-    // Create a glow texture (larger, semi-transparent)
+    // Create glow texture.
     let laserGlowGraphics = this.add.graphics();
     laserGlowGraphics.fillStyle(0xff0000, 0.5);
-    // Draw a rectangle slightly larger than the core (14x34)
     laserGlowGraphics.fillRect(0, 0, 14, 34);
     laserGlowGraphics.generateTexture('laserGlow', 14, 34);
     laserGlowGraphics.destroy();
     
-    // Create a core texture (solid red, 10x30)
+    // Create core texture.
     let laserCoreGraphics = this.add.graphics();
     laserCoreGraphics.fillStyle(0xff0000, 1);
     laserCoreGraphics.fillRect(0, 0, 10, 30);
@@ -175,10 +177,10 @@ const config = {
     blocks = this.add.group();
     lasers = this.add.group();
     
-    // Create an ammo display at the top-right.
+    // Create an ammo display at top-right.
     ammoText = this.add.text(config.width - 150, 10, 'Ammo: 0', { fontSize: '20px', fill: '#fff' });
     
-    // Show tutorial overlay for laser shooting only on first launch.
+    // Show tutorial overlay for laser shooting on first launch.
     if (!localStorage.getItem("tutorialShown")) {
       let tutorialText = this.add.text(config.width / 2, config.height / 2, "Tap to shoot laser!\nLift finger then tap again to fire.", {
         fontSize: '24px',
@@ -199,8 +201,10 @@ const config = {
       canShoot = true;
     });
     this.input.on('pointerdown', (pointer) => {
-      if (canShoot && laserAmmo > 0) {
+      // Check if at least 1 second has passed since the last shot.
+      if (canShoot && laserAmmo > 0 && Date.now() - lastLaserShotTime >= 1000) {
         shootLaser.call(this);
+        lastLaserShotTime = Date.now();
         laserAmmo--;
         ammoText.setText('Ammo: ' + laserAmmo);
         canShoot = false;
@@ -235,7 +239,7 @@ const config = {
     
     // Update lasers: move upward and check for collisions with blocks.
     lasers.getChildren().forEach(function(laserContainer) {
-      // Use the core's bounds for collision.
+      // Move the entire container.
       laserContainer.y -= laserContainer.speed * dt;
       if (laserContainer.y < 0) {
         laserContainer.destroy();
@@ -245,7 +249,7 @@ const config = {
           if (obstacle.type === "block" && checkCollision(coreBounds, obstacle.getBounds())) {
             obstacle.destroy();
             laserContainer.destroy();
-            score += 5; // Bonus for hitting a block.
+            score += 5; // Bonus for hitting a block with a laser.
             scoreText.setText('Score: ' + score);
           }
         });
@@ -319,11 +323,10 @@ const config = {
     // Create the glow and core images.
     let glow = this.add.image(0, 0, 'laserGlow').setOrigin(0.5);
     let core = this.add.image(0, 0, 'laserCore').setOrigin(0.5);
-    // Add both to the container.
     laserContainer.add([glow, core]);
     // Store a reference to the core for collision detection.
     laserContainer.core = core;
-    // Set a speed property on the container.
+    // Set laser speed.
     laserContainer.speed = 300;
     lasers.add(laserContainer);
   }
