@@ -24,6 +24,7 @@ const config = {
   let speedMultiplier = 1;
   let nextSpeedIncreaseScore;
   let nextMaxBlocksIncreaseScore;
+  
   let playerSpeed = 6;
   
   const modeSettings = {
@@ -58,23 +59,73 @@ const config = {
   let spawnTimer = null;
   let gameOverShown = false;
   
+  // Firestore reference (initialized in index.html)
+  const db = firebase.firestore();
+  
   // -------------------------
-  // FIREBASE LEADERBOARD FUNCTIONS (Using Firestore)
+  // FIREBASE LEADERBOARD & USER FUNCTIONS
   // -------------------------
-  async function submitScoreFirestore(mode, name, score) {
-    try {
-      await db.collection("scores").add({
-        mode: mode,
-        name: name,
-        score: score,
-        timestamp: firebase.firestore.FieldValue.serverTimestamp()
-      });
-      console.log("Score submitted to Firestore");
-    } catch (err) {
-      console.error("Error submitting score to Firestore:", err);
+  
+  // Enforce unique names by using a separate "users" collection.
+  // This function attempts to register the name.
+  // If the document with the given name exists, then the name is taken.
+  async function registerUniqueName(name) {
+    const docRef = db.collection("users").doc(name);
+    const doc = await docRef.get();
+    if (doc.exists) {
+      return false;
+    } else {
+      await docRef.set({ registeredAt: firebase.firestore.FieldValue.serverTimestamp() });
+      return true;
     }
   }
   
+  // Prompt user for a unique name
+  async function promptForUniqueName() {
+    let name = prompt("Please enter your name:");
+    if (!name) name = "Guest";
+    const unique = await registerUniqueName(name);
+    if (!unique) {
+      alert("This name is already in use. Please choose a different name.");
+      return await promptForUniqueName();
+    }
+    return name;
+  }
+  
+  // Submit score to Firestore with one entry per name per mode.
+  // Uses a composite document id: mode + "_" + name.
+  async function submitScoreFirestore(mode, name, score) {
+    const docId = `${mode}_${name}`;
+    const docRef = db.collection("scores").doc(docId);
+    try {
+      const doc = await docRef.get();
+      if (doc.exists) {
+        // If the new score is higher, update it.
+        if (score > doc.data().score) {
+          await docRef.update({
+            score: score,
+            timestamp: firebase.firestore.FieldValue.serverTimestamp()
+          });
+          console.log("Score updated for", name);
+        } else {
+          console.log("Existing score is higher; not updating for", name);
+        }
+      } else {
+        // Create a new document.
+        await docRef.set({
+          mode: mode,
+          name: name,
+          score: score,
+          timestamp: firebase.firestore.FieldValue.serverTimestamp()
+        });
+        console.log("Score created for", name);
+      }
+    } catch (err) {
+      console.error("Error in submitScoreFirestore:", err);
+    }
+  }
+  
+  // Retrieve top 10 scores for a given mode
   async function getGlobalLeaderboard(mode) {
     try {
       const querySnapshot = await db.collection("scores")
@@ -131,7 +182,7 @@ const config = {
     if (!gameStarted || gameOver) return;
     let dt = delta / 16.67;
     
-    // Player Movement
+    // Player movement
     if (cursors.left.isDown) {
       player.x -= playerSpeed * dt;
     } else if (cursors.right.isDown) {
@@ -147,7 +198,7 @@ const config = {
     }
     player.x = Phaser.Math.Clamp(player.x, player.width / 2, config.width - player.width / 2);
     
-    // Blocks Movement & Collision
+    // Blocks movement & collision
     blocks.getChildren().forEach(function(block) {
       block.speed = block.baseSpeed * speedMultiplier;
       block.y += block.speed * dt;
@@ -161,7 +212,7 @@ const config = {
       }
     });
     
-    // Progression
+    // Progression logic
     let threshold = modeSettings[selectedMode].threshold;
     if (score >= nextSpeedIncreaseScore) {
       speedMultiplier *= modeSettings[selectedMode].speedIncreaseFactor;
@@ -191,10 +242,10 @@ const config = {
   // MODE SELECTION UI & GAME START FUNCTIONS
   // -------------------------
   async function createModeSelectionUI(scene) {
+    // Get player's name; if not set, prompt for a unique name.
     let playerName = localStorage.getItem("playerName");
     if (!playerName) {
-      playerName = prompt("Please enter your name:");
-      if (!playerName) { playerName = "Guest"; }
+      playerName = await promptForUniqueName();
       localStorage.setItem("playerName", playerName);
     }
     
@@ -204,7 +255,6 @@ const config = {
     let personalHighscoreNormal = localStorage.getItem('highscore_normal') || 0;
     let personalHighscoreAsian = localStorage.getItem('highscore_asian') || 0;
     
-    // Position container at 30% of screen height for better mobile fit.
     modeContainer = scene.add.container(config.width / 2, config.height * 0.3);
     modeContainer.setDepth(100);
     
@@ -241,15 +291,18 @@ const config = {
       align: 'center'
     }).setOrigin(0.5);
     
+    // Leaderboard columns fetched from Firestore
+    let leaderboardNormal = await getGlobalLeaderboard("normal");
+    let leaderboardAsian = await getGlobalLeaderboard("asian");
     let leaderboardNormalText = scene.add.text(-config.width / 4, 80, 
-      "Normal:\n" + formatLeaderboardFromData(await getGlobalLeaderboard("normal")), {
+      "Normal:\n" + formatLeaderboardFromData(leaderboardNormal), {
       fontSize: '14px',
       fill: '#fff',
       align: 'center'
     }).setOrigin(0.5, 0);
     
     let leaderboardAsianText = scene.add.text(config.width / 4, 80, 
-      "Asian:\n" + formatLeaderboardFromData(await getGlobalLeaderboard("asian")), {
+      "Asian:\n" + formatLeaderboardFromData(leaderboardAsian), {
       fontSize: '14px',
       fill: '#fff',
       align: 'center'
@@ -262,11 +315,16 @@ const config = {
       padding: { x: 6, y: 3 }
     }).setOrigin(0.5).setInteractive();
     
-    changeNameButton.on('pointerdown', () => {
+    changeNameButton.on('pointerdown', async () => {
       let newName = prompt("Enter your new name:");
       if (newName) {
-        localStorage.setItem("playerName", newName);
-        playerNameText.setText(`Hello, ${newName}!`);
+        const unique = await registerUniqueName(newName);
+        if (!unique) {
+          alert("This name is already in use. Please choose a different name.");
+        } else {
+          localStorage.setItem("playerName", newName);
+          playerNameText.setText(`Hello, ${newName}!`);
+        }
       }
     });
     
@@ -275,6 +333,7 @@ const config = {
       modeContainer.destroy();
       startGame(scene);
     });
+    
     asianButton.on('pointerdown', function() {
       setMode("asian");
       modeContainer.destroy();
@@ -291,6 +350,30 @@ const config = {
       leaderboardAsianText,
       changeNameButton
     ]);
+  }
+  
+  // Checks if a name is unique across all modes using the "users" collection.
+  async function registerUniqueName(name) {
+    const docRef = db.collection("users").doc(name);
+    const doc = await docRef.get();
+    if (doc.exists) {
+      return false;
+    } else {
+      await docRef.set({ registeredAt: firebase.firestore.FieldValue.serverTimestamp() });
+      return true;
+    }
+  }
+  
+  // Prompt for a unique name (recursively if needed).
+  async function promptForUniqueName() {
+    let name = prompt("Please enter your name:");
+    if (!name) name = "Guest";
+    const unique = await registerUniqueName(name);
+    if (!unique) {
+      alert("This name is already in use. Please choose a different name.");
+      return await promptForUniqueName();
+    }
+    return name;
   }
   
   function setMode(mode) {
@@ -334,9 +417,6 @@ const config = {
     createGameOverUI(scene);
   }
   
-  // -------------------------
-  // BLOCK SPAWNING & COLLISION
-  // -------------------------
   function spawnBlock() {
     if (gameOver) return;
     if (blocks.getLength() < maxBlocks) {
@@ -361,9 +441,6 @@ const config = {
     return Phaser.Geom.Intersects.RectangleToRectangle(boundsA, boundsB);
   }
   
-  // -------------------------
-  // GAME OVER & RESTART UI
-  // -------------------------
   function createGameOverUI(scene) {
     if (gameOverContainer) return;
     gameOverContainer = scene.add.container(config.width / 2, config.height / 2);
@@ -439,40 +516,5 @@ const config = {
     
     gameOverContainer.setVisible(false);
     createModeSelectionUI(scene);
-  }
-  
-  // -------------------------
-  // FIREBASE LEADERBOARD FUNCTIONS (Firestore)
-  // -------------------------
-  async function submitScoreFirestore(mode, name, score) {
-    try {
-      await db.collection("scores").add({
-        mode: mode,
-        name: name,
-        score: score,
-        timestamp: firebase.firestore.FieldValue.serverTimestamp()
-      });
-      console.log("Score submitted to Firestore");
-    } catch (err) {
-      console.error("Error submitting score to Firestore:", err);
-    }
-  }
-  
-  async function getGlobalLeaderboard(mode) {
-    try {
-      const querySnapshot = await db.collection("scores")
-        .where("mode", "==", mode)
-        .orderBy("score", "desc")
-        .limit(10)
-        .get();
-      let leaderboard = [];
-      querySnapshot.forEach(doc => {
-        leaderboard.push(doc.data());
-      });
-      return leaderboard;
-    } catch (err) {
-      console.error("Error getting leaderboard from Firestore:", err);
-      return [];
-    }
   }
   
