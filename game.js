@@ -60,14 +60,14 @@ const config = {
   let spawnTimer = null;
   let gameOverShown = false;
   
-  // New: Group for lasers and shooting control
+  // New: Groups for lasers and shooting control
   let lasers;
-  let canShoot = false; // set true on pointerup so next tap can shoot
+  let canShoot = false; // Flag to allow shooting on pointerdown after pointerup
   
-  // Laser ammo variables: starts at 0; gain 1 bullet per 5 points.
+  // Laser ammo variables
   let laserAmmo = 0;
-  let lastScoreCheckpoint = 0; // used to track when to add ammo
-  let ammoText; // UI text to display ammo count
+  let lastScoreCheckpoint = 0;
+  let ammoText; // UI display for ammo count
   
   // Global variable for the "Change Name" button
   let changeNameButton;
@@ -142,7 +142,7 @@ const config = {
     this.load.image('player', 'assets/player.png');
     this.load.image('block', 'assets/block.png');
     this.load.image('star', 'assets/star.png');
-    this.load.image('laser', 'assets/laser.png'); // Red laser asset
+    // Do not load a PNG for laser; we'll create a vector-based laser texture.
     this.load.image('gameOverBg', 'assets/game_over_bg.png');
     this.load.image('restartButton', 'assets/restart_button.png');
   }
@@ -155,15 +155,23 @@ const config = {
       .setOrigin(0)
       .setDisplaySize(config.width, config.height);
     
+    // Generate a red laser texture as a vector graphic.
+    // Draw a red rectangle (10x30) and generate a texture called 'laser'
+    let laserGraphics = this.add.graphics();
+    laserGraphics.fillStyle(0xff0000, 1);
+    laserGraphics.fillRect(0, 0, 10, 30);
+    laserGraphics.generateTexture('laser', 10, 30);
+    laserGraphics.destroy();
+    
     // Create groups for obstacles, lasers.
     blocks = this.add.group();
     lasers = this.add.group();
     
-    // Create an ammo display at top-right.
+    // Create an ammo display at the top-right.
     ammoText = this.add.text(config.width - 150, 10, 'Ammo: 0', { fontSize: '20px', fill: '#fff' });
     
-    // Show a tutorial overlay for laser shooting.
-    let tutorialText = this.add.text(config.width / 2, config.height / 2, "Tap to shoot laser!\nRemove finger then tap again to fire.", {
+    // Tutorial overlay for laser shooting.
+    let tutorialText = this.add.text(config.width / 2, config.height / 2, "Tap to shoot laser!\nLift finger then tap again.", {
       fontSize: '24px',
       fill: '#fff',
       align: 'center'
@@ -175,12 +183,11 @@ const config = {
       onComplete: () => tutorialText.destroy()
     });
     
-    // Input events for shooting:
+    // Input events for shooting: pointerup enables shooting; pointerdown fires if ammo available.
     this.input.on('pointerup', () => {
       canShoot = true;
     });
     this.input.on('pointerdown', (pointer) => {
-      // If allowed to shoot and there is ammo, shoot laser.
       if (canShoot && laserAmmo > 0) {
         shootLaser.call(this);
         laserAmmo--;
@@ -215,7 +222,7 @@ const config = {
     }
     player.x = Phaser.Math.Clamp(player.x, player.width / 2, config.width - player.width / 2);
     
-    // Update lasers: move upward and check collision with blocks.
+    // Update lasers: move upward, check collisions with blocks.
     lasers.getChildren().forEach(function(laser) {
       laser.y -= laser.speed * dt;
       if (laser.y < 0) {
@@ -225,27 +232,24 @@ const config = {
           if (obstacle.type === "block" && checkCollision(laser, obstacle)) {
             obstacle.destroy();
             laser.destroy();
-            // Optionally add bonus points for hitting a block with a laser.
-            score += 5;
+            score += 5; // Bonus for hitting a block.
             scoreText.setText('Score: ' + score);
           }
         });
       }
     });
     
-    // Blocks movement & collision (and star collection)
+    // Blocks movement & collision; star collection gives 10 points.
     blocks.getChildren().forEach(function(obstacle) {
       obstacle.speed = obstacle.baseSpeed * speedMultiplier;
       obstacle.y += obstacle.speed * dt;
       
       if (checkCollision(player, obstacle)) {
         if (obstacle.type === "star") {
-          // Collect the star: +10 score.
           score += 10;
           scoreText.setText('Score: ' + score);
           obstacle.destroy();
         } else if (obstacle.type === "block") {
-          // Collision with block causes game over.
           showGameOver();
         }
       }
@@ -259,7 +263,7 @@ const config = {
       }
     });
     
-    // Update laser ammo based on score: gain 1 bullet per every 5 points.
+    // Update laser ammo: gain 1 bullet for every 5 points scored.
     if (score - lastScoreCheckpoint >= 5) {
       let bonus = Math.floor((score - lastScoreCheckpoint) / 5);
       laserAmmo += bonus;
@@ -267,7 +271,7 @@ const config = {
       ammoText.setText('Ammo: ' + laserAmmo);
     }
     
-    // Progression logic (unchanged)
+    // Progression logic
     let threshold = modeSettings[selectedMode].threshold;
     if (score >= nextSpeedIncreaseScore) {
       speedMultiplier *= modeSettings[selectedMode].speedIncreaseFactor;
@@ -297,11 +301,10 @@ const config = {
   // SHOOT LASER FUNCTION
   // -------------------------
   function shootLaser() {
-    // Create a laser at the player's current position.
     let laser = this.add.image(player.x, player.y - player.height / 2, 'laser')
       .setOrigin(0.5)
       .setDisplaySize(10, 30);
-    laser.speed = 300; // Laser speed (adjust as needed)
+    laser.speed = 300;
     lasers.add(laser);
   }
   
@@ -309,7 +312,6 @@ const config = {
   // MODE SELECTION UI & GAME START FUNCTIONS
   // -------------------------
   async function createModeSelectionUI(scene) {
-    // Check for stored name; if exists, use it; if not, prompt once.
     let storedName = localStorage.getItem("playerName");
     if (!storedName) {
       storedName = await promptForUniqueName();
@@ -317,14 +319,12 @@ const config = {
     }
     const currentPlayerName = storedName;
     
-    // Clear previous UI elements.
     if (gameOverContainer) { gameOverContainer.destroy(); gameOverContainer = null; }
     if (modeContainer) { modeContainer.destroy(); modeContainer = null; }
     
     let personalHighscoreNormal = localStorage.getItem('highscore_normal') || 0;
     let personalHighscoreAsian = localStorage.getItem('highscore_asian') || 0;
     
-    // Position container at 40% of screen height.
     modeContainer = scene.add.container(config.width / 2, config.height * 0.4);
     modeContainer.setDepth(100);
     
@@ -378,7 +378,6 @@ const config = {
       align: 'center'
     }).setOrigin(0.5, 0);
     
-    // Place the Change Name button at the very bottom of the screen (outside the container)
     if (changeNameButton) { changeNameButton.destroy(); }
     changeNameButton = scene.add.text(config.width / 2, config.height - 30, "Change Name", {
       fontSize: '14px',
@@ -468,7 +467,6 @@ const config = {
   function spawnBlock() {
     if (gameOver) return;
     if (blocks.getLength() < maxBlocks) {
-      // 10% chance for a star, otherwise spawn a block.
       let isStar = Math.random() < 0.10;
       let obstacle;
       if (isStar) {
