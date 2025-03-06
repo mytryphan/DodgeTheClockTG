@@ -24,8 +24,7 @@ const config = {
   let speedMultiplier = 1;
   let nextSpeedIncreaseScore;
   let nextMaxBlocksIncreaseScore;
-  
-  let playerSpeed = 6; // Initial player speed
+  let playerSpeed = 6;
   
   const modeSettings = {
     normal: {
@@ -53,7 +52,6 @@ const config = {
   let player, cursors, score = 0, scoreText, gameOver = false;
   let background, gameOverContainer, modeContainer;
   let targetX = null;
-  const playerBaseSpeed = 6;
   let blocks;
   let maxBlocks;
   let gameStarted = false;
@@ -61,27 +59,38 @@ const config = {
   let gameOverShown = false;
   
   // -------------------------
-  // LEADERBOARD HELPER FUNCTIONS (Using Netlify Functions / LocalStorage demo)
+  // FIREBASE LEADERBOARD FUNCTIONS (Using Firestore)
   // -------------------------
-  function submitScore(mode, name, score) {
-    fetch('https://dodgetheblock.netlify.app/.netlify/functions/submit-score', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ mode, name, score })
-    })
-      .then(res => res.json())
-      .then(data => console.log("Score submitted", data))
-      .catch(err => console.error("Error submitting score", err));
+  async function submitScoreFirestore(mode, name, score) {
+    try {
+      await db.collection("scores").add({
+        mode: mode,
+        name: name,
+        score: score,
+        timestamp: firebase.firestore.FieldValue.serverTimestamp()
+      });
+      console.log("Score submitted to Firestore");
+    } catch (err) {
+      console.error("Error submitting score to Firestore:", err);
+    }
   }
   
-  function fetchLeaderboard(mode, callback) {
-    fetch(`https://dodgetheblock.netlify.app/.netlify/functions/get-leaderboard?mode=${mode}`)
-      .then(res => res.json())
-      .then(data => callback(data.leaderboard))
-      .catch(err => {
-        console.error("Error fetching leaderboard", err);
-        callback(null);
+  async function getGlobalLeaderboard(mode) {
+    try {
+      const querySnapshot = await db.collection("scores")
+        .where("mode", "==", mode)
+        .orderBy("score", "desc")
+        .limit(10)
+        .get();
+      let leaderboard = [];
+      querySnapshot.forEach(doc => {
+        leaderboard.push(doc.data());
       });
+      return leaderboard;
+    } catch (err) {
+      console.error("Error getting leaderboard from Firestore:", err);
+      return [];
+    }
   }
   
   function formatLeaderboardFromData(data) {
@@ -91,11 +100,6 @@ const config = {
       text += `${i + 1}. ${data[i].name} - ${data[i].score}\n`;
     }
     return text;
-  }
-  
-  function formatLeaderboard(mode) {
-    // For demo, return placeholder text; later you can fetch from your backend.
-    return "Loading...";
   }
   
   // -------------------------
@@ -186,7 +190,7 @@ const config = {
   // -------------------------
   // MODE SELECTION UI & GAME START FUNCTIONS
   // -------------------------
-  function createModeSelectionUI(scene) {
+  async function createModeSelectionUI(scene) {
     let playerName = localStorage.getItem("playerName");
     if (!playerName) {
       playerName = prompt("Please enter your name:");
@@ -200,6 +204,7 @@ const config = {
     let personalHighscoreNormal = localStorage.getItem('highscore_normal') || 0;
     let personalHighscoreAsian = localStorage.getItem('highscore_asian') || 0;
     
+    // Position container at 30% of screen height for better mobile fit.
     modeContainer = scene.add.container(config.width / 2, config.height * 0.3);
     modeContainer.setDepth(100);
     
@@ -237,14 +242,14 @@ const config = {
     }).setOrigin(0.5);
     
     let leaderboardNormalText = scene.add.text(-config.width / 4, 80, 
-      "Normal:\n" + formatLeaderboard("normal"), {
+      "Normal:\n" + formatLeaderboardFromData(await getGlobalLeaderboard("normal")), {
       fontSize: '14px',
       fill: '#fff',
       align: 'center'
     }).setOrigin(0.5, 0);
     
     let leaderboardAsianText = scene.add.text(config.width / 4, 80, 
-      "Asian:\n" + formatLeaderboard("asian"), {
+      "Asian:\n" + formatLeaderboardFromData(await getGlobalLeaderboard("asian")), {
       fontSize: '14px',
       fill: '#fff',
       align: 'center'
@@ -394,27 +399,18 @@ const config = {
     gameOverContainer.getAt(2).setText('Score: ' + score);
     
     let playerName = localStorage.getItem("playerName") || "Guest";
-    fetch('https://dodgetheblock.netlify.app/.netlify/functions/submit-score', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ mode: selectedMode, name: playerName, score: score })
-    })
-      .then(res => res.json())
-      .then(data => console.log("Score submitted", data))
-      .catch(err => console.error("Error submitting score", err));
+    submitScoreFirestore(selectedMode, playerName, score);
     
     if (selectedMode === "normal") {
       let hs = localStorage.getItem('highscore_normal') || 0;
       if (score > hs) {
         localStorage.setItem('highscore_normal', score);
       }
-      updateLeaderboard("normal", playerName, score);
     } else if (selectedMode === "asian") {
       let hs = localStorage.getItem('highscore_asian') || 0;
       if (score > hs) {
         localStorage.setItem('highscore_asian', score);
       }
-      updateLeaderboard("asian", playerName, score);
     }
   }
   
@@ -443,5 +439,40 @@ const config = {
     
     gameOverContainer.setVisible(false);
     createModeSelectionUI(scene);
+  }
+  
+  // -------------------------
+  // FIREBASE LEADERBOARD FUNCTIONS (Firestore)
+  // -------------------------
+  async function submitScoreFirestore(mode, name, score) {
+    try {
+      await db.collection("scores").add({
+        mode: mode,
+        name: name,
+        score: score,
+        timestamp: firebase.firestore.FieldValue.serverTimestamp()
+      });
+      console.log("Score submitted to Firestore");
+    } catch (err) {
+      console.error("Error submitting score to Firestore:", err);
+    }
+  }
+  
+  async function getGlobalLeaderboard(mode) {
+    try {
+      const querySnapshot = await db.collection("scores")
+        .where("mode", "==", mode)
+        .orderBy("score", "desc")
+        .limit(10)
+        .get();
+      let leaderboard = [];
+      querySnapshot.forEach(doc => {
+        leaderboard.push(doc.data());
+      });
+      return leaderboard;
+    } catch (err) {
+      console.error("Error getting leaderboard from Firestore:", err);
+      return [];
+    }
   }
   

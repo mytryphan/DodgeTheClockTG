@@ -4,11 +4,29 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>DodgetheBlock Game</title>
-  <!-- Load Phaser 3 from CDN -->
+  <!-- Load Phaser 3 -->
   <script src="https://cdn.jsdelivr.net/npm/phaser@3/dist/phaser.min.js"></script>
+  <!-- Load Firebase App & Firestore (compat versions) -->
+  <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
+  <script>
+    // Your Firebase configuration (using your provided values)
+    const firebaseConfig = {
+      apiKey: "AIzaSyDp53G8RVs-rVBEPo3nwBr4MeTJSb_0n78",
+      authDomain: "dodgetheblockleaderboard.firebaseapp.com",
+      projectId: "dodgetheblockleaderboard",
+      storageBucket: "dodgetheblockleaderboard.firebasestorage.app",
+      messagingSenderId: "116341874185",
+      appId: "1:116341874185:web:04e64b5d16dcbe95e662d8"
+    };
+    // Initialize Firebase
+    firebase.initializeApp(firebaseConfig);
+    // Initialize Firestore and attach it to a global variable for our game.js code
+    const db = firebase.firestore();
+  </script>
   <!-- Load your game script -->
   <script src="game.js"></script>
-  <!-- Initialize Telegram Web Apps API if available -->
+  <!-- Initialize Telegram Web Apps API (if available) -->
   <script>
     if (window.Telegram && window.Telegram.WebApp) {
       window.Telegram.WebApp.expand();
