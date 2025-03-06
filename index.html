@@ -3,19 +3,18 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Telegram Game</title>
-  <!-- Load Phaser 3 from CDN -->
+  <title>DodgetheBlock Game</title>
+  <!-- Load Phaser 3 -->
   <script src="https://cdn.jsdelivr.net/npm/phaser@3/dist/phaser.min.js"></script>
   <!-- Load your game script -->
   <script src="game.js"></script>
-  <!-- Initialize Telegram Web App API if available -->
+  <!-- Initialize Telegram Web Apps API (if available) -->
   <script>
     if (window.Telegram && window.Telegram.WebApp) {
       window.Telegram.WebApp.expand();
     }
   </script>
   <style>
-    /* Basic styles for full screen game */
     body {
       margin: 0;
       padding: 0;
@@ -29,7 +28,6 @@
   </style>
 </head>
 <body>
-  <!-- Game will be rendered inside this div -->
   <div id="game-container"></div>
 </body>
 </html>

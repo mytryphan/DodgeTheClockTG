@@ -5,7 +5,7 @@ const config = {
     type: Phaser.AUTO,
     width: window.innerWidth,
     height: window.innerHeight,
-    parent: 'game-container', // ID of the HTML element where the game renders
+    parent: 'game-container',
     scale: {
       mode: Phaser.Scale.FIT,
       autoCenter: Phaser.Scale.CENTER_BOTH,
@@ -19,14 +19,14 @@ const config = {
   
   let game = new Phaser.Game(config);
   
-  // Global variables for mode progression and selection
+  // Global variables for progression and mode selection
   let selectedMode;  // "normal" or "asian"
   let speedMultiplier = 1;         // For block speed progression
   let nextSpeedIncreaseScore;      // Score threshold for next speed increase
-  let nextMaxBlocksIncreaseScore;  // Score threshold for next increase in max blocks
+  let nextMaxBlocksIncreaseScore;  // Score threshold for next increase in maximum blocks
   
   // Global player speed variable
-  let playerSpeed = 6; // Initial player speed (pixels per frame at 60 FPS)
+  let playerSpeed = 6; // Initial player speed
   
   // Mode settings object
   const modeSettings = {
@@ -38,7 +38,7 @@ const config = {
       spawnDelay: 500, // ms
       speedIncreaseFactor: 1.05, // 5% block speed increase every threshold
       maxBlockIncrease: 1,       // Increase max blocks by 1 every threshold (applied every 20 scores)
-      threshold: 10              // Every 10 scores for speed/player; for max blocks, threshold is 20 scores
+      threshold: 10              // Every 10 scores for speed and player; for max blocks, threshold is 20 scores
     },
     asian: {
       initialMinBlocks: 2,
@@ -55,36 +55,21 @@ const config = {
   let player, cursors, score = 0, scoreText, gameOver = false;
   let background, gameOverContainer, modeContainer;
   let targetX = null; // For mobile touch input
-  const playerBaseSpeed = 6; // Base player movement speed (pixels per frame at 60 FPS)
+  const playerBaseSpeed = 6;
   let blocks; // Group for falling blocks
   let maxBlocks; // Current maximum allowed blocks on screen
   let gameStarted = false; // Indicates if game has started (after mode selection)
   let spawnTimer = null; // Timer for block spawning
   
   // -------------------------
-  // LEADERBOARD HELPER FUNCTIONS (LOCALSTORAGE DEMO)
+  // LEADERBOARD HELPER FUNCTIONS (Using FaunaDB via Netlify Functions)
+  // For persistent global leaderboard, we'll use Netlify Functions.
+  // For now, our in-game leaderboard functions (formatLeaderboard) remain as a fallback.
   // -------------------------
-  function getLeaderboard(mode) {
-    let key = "leaderboard_" + mode;
-    let board = localStorage.getItem(key);
-    return board ? JSON.parse(board) : [];
-  }
-  
-  function updateLeaderboard(mode, playerName, score) {
-    let board = getLeaderboard(mode);
-    board.push({ name: playerName, score: score });
-    board.sort((a, b) => b.score - a.score);
-    if (board.length > 10) board = board.slice(0, 10);
-    localStorage.setItem("leaderboard_" + mode, JSON.stringify(board));
-  }
-  
   function formatLeaderboard(mode) {
-    let board = getLeaderboard(mode);
-    let text = "";
-    for (let i = 0; i < board.length; i++) {
-      text += `${i + 1}. ${board[i].name} - ${board[i].score}\n`;
-    }
-    return text || "No entries";
+    // This function should fetch from the server.
+    // For demo purposes, we'll return a placeholder.
+    return "Loading...";
   }
   
   // -------------------------
@@ -102,12 +87,10 @@ const config = {
   // CREATE FUNCTION
   // -------------------------
   function create() {
-    // Add full-screen background
     background = this.add.image(0, 0, 'background')
       .setOrigin(0)
       .setDisplaySize(config.width, config.height);
       
-    // Show mode selection UI
     createModeSelectionUI(this);
   }
   
@@ -116,9 +99,9 @@ const config = {
   // -------------------------
   function update(time, delta) {
     if (!gameStarted || gameOver) return;
-    let dt = delta / 16.67; // Normalize movement to 60 FPS
+    let dt = delta / 16.67;
     
-    // --- Player Movement ---
+    // Player Movement
     if (cursors.left.isDown) {
       player.x -= playerSpeed * dt;
     } else if (cursors.right.isDown) {
@@ -134,7 +117,7 @@ const config = {
     }
     player.x = Phaser.Math.Clamp(player.x, player.width / 2, config.width - player.width / 2);
     
-    // --- Blocks Movement & Collision ---
+    // Blocks Movement & Collision
     blocks.getChildren().forEach(function(block) {
       block.speed = block.baseSpeed * speedMultiplier;
       block.y += block.speed * dt;
@@ -148,11 +131,11 @@ const config = {
       }
     });
     
-    // --- Progression ---
+    // Progression
     let threshold = modeSettings[selectedMode].threshold;
     if (score >= nextSpeedIncreaseScore) {
       speedMultiplier *= modeSettings[selectedMode].speedIncreaseFactor;
-      playerSpeed *= 1.10; // Increase player's speed by 10%
+      playerSpeed *= 1.10;
       nextSpeedIncreaseScore += threshold;
     }
     if (selectedMode === "normal") {
@@ -178,7 +161,6 @@ const config = {
   // MODE SELECTION UI & GAME START FUNCTIONS
   // -------------------------
   function createModeSelectionUI(scene) {
-    // Ask for player's name if not already set in localStorage.
     let playerName = localStorage.getItem("playerName");
     if (!playerName) {
       playerName = prompt("Please enter your name:");
@@ -186,7 +168,6 @@ const config = {
       localStorage.setItem("playerName", playerName);
     }
     
-    // Remove any existing UI containers.
     if (gameOverContainer) {
       gameOverContainer.destroy();
       gameOverContainer = null;
@@ -199,7 +180,6 @@ const config = {
     let personalHighscoreNormal = localStorage.getItem('highscore_normal') || 0;
     let personalHighscoreAsian = localStorage.getItem('highscore_asian') || 0;
     
-    // Create a container for the mode selection UI, positioned at one-fourth of the screen height.
     modeContainer = scene.add.container(config.width / 2, config.height / 4);
     modeContainer.setDepth(100);
     
@@ -229,32 +209,29 @@ const config = {
       padding: { x: 10, y: 5 }
     }).setOrigin(0.5).setInteractive();
     
-    // Personal highscore text for each mode.
-    let personalHighscoreText = scene.add.text(0, 80, 
-      `Your Highscore - Normal: ${personalHighscoreNormal}   Asian: ${personalHighscoreAsian}`, {
-      fontSize: '20px',
+    let personalHighscoreText = scene.add.text(0, 70, 
+      `Your Highscore:\nNormal: ${personalHighscoreNormal}   Asian: ${personalHighscoreAsian}`, {
+      fontSize: '16px', // Made smaller for mobile
       fill: '#fff',
       align: 'center'
     }).setOrigin(0.5);
     
-    // Leaderboard columns, with headers shortened.
-    let leaderboardNormalText = scene.add.text(-config.width / 4, 130, 
+    let leaderboardNormalText = scene.add.text(-config.width / 4, 100, 
       "Normal:\n" + formatLeaderboard("normal"), {
       fontSize: '16px',
       fill: '#fff',
       align: 'center'
     }).setOrigin(0.5, 0);
     
-    let leaderboardAsianText = scene.add.text(config.width / 4, 130, 
+    let leaderboardAsianText = scene.add.text(config.width / 4, 100, 
       "Asian:\n" + formatLeaderboard("asian"), {
       fontSize: '16px',
       fill: '#fff',
       align: 'center'
     }).setOrigin(0.5, 0);
     
-    // "Change Name" button at the bottom.
-    let changeNameButton = scene.add.text(0, 200, "Change Name", {
-      fontSize: '20px',
+    let changeNameButton = scene.add.text(0, 150, "Change Name", {
+      fontSize: '16px',
       fill: '#ff0',
       backgroundColor: '#000',
       padding: { x: 8, y: 4 }
@@ -285,53 +262,38 @@ const config = {
   function setMode(mode) {
     selectedMode = mode;
     speedMultiplier = 1;
-    playerSpeed = 6; // Reset player's speed
+    playerSpeed = 6;
     nextSpeedIncreaseScore = modeSettings[mode].threshold;
     nextMaxBlocksIncreaseScore = (mode === "normal") ? modeSettings[mode].threshold * 2 : modeSettings[mode].threshold;
   }
   
   function startGame(scene) {
     gameStarted = true;
-    // Destroy mode selection UI if it exists.
     if (modeContainer) {
       modeContainer.destroy();
       modeContainer = null;
     }
-    
-    // Create player.
     player = scene.add.image(config.width / 2, config.height - 80, 'player')
       .setOrigin(0.5)
       .setDisplaySize(40, 40);
-    
-    // Create score display.
     score = 0;
     scoreText = scene.add.text(10, 10, 'Score: 0', { fontSize: '20px', fill: '#fff' });
-    
-    // Set up input controls.
     cursors = scene.input.keyboard.createCursorKeys();
     scene.input.on('pointerdown', (pointer) => { targetX = pointer.x; });
     scene.input.on('pointermove', (pointer) => { targetX = pointer.x; });
     scene.input.on('pointerup', () => { targetX = null; });
-    
-    // Create group for blocks.
     blocks = scene.add.group();
-    
-    // Set initial maxBlocks based on mode settings.
     if (selectedMode === "normal") {
       maxBlocks = Phaser.Math.Between(modeSettings.normal.initialMinBlocks, modeSettings.normal.initialMaxBlocks);
     } else if (selectedMode === "asian") {
       maxBlocks = Phaser.Math.Between(modeSettings.asian.initialMinBlocks, modeSettings.asian.initialMaxBlocks);
     }
-    
-    // Start block spawning timer.
     spawnTimer = scene.time.addEvent({
       delay: modeSettings[selectedMode].spawnDelay,
       callback: spawnBlock,
       callbackScope: scene,
       loop: true
     });
-    
-    // (Re)create Game Over UI if needed.
     createGameOverUI(scene);
   }
   
@@ -370,7 +332,6 @@ const config = {
     gameOverContainer = scene.add.container(config.width / 2, config.height / 2);
     gameOverContainer.setDepth(100);
     gameOverContainer.setVisible(false);
-  
     let gameOverBg = scene.add.image(0, 0, 'gameOverBg')
       .setOrigin(0.5)
       .setDisplaySize(300, 200);
@@ -388,7 +349,6 @@ const config = {
       .setOrigin(0.5)
       .setInteractive();
     restartButton.on('pointerdown', () => { restartGame(scene); });
-    
     gameOverContainer.add([gameOverBg, gameOverText, finalScoreText, restartButton]);
   }
   
@@ -396,8 +356,6 @@ const config = {
     gameOver = true;
     gameOverContainer.setVisible(true);
     gameOverContainer.getAt(2).setText('Score: ' + score);
-    
-    // Update personal highscore and global leaderboard.
     let playerName = localStorage.getItem("playerName") || "Guest";
     if (selectedMode === "normal") {
       let hs = localStorage.getItem('highscore_normal') || 0;
@@ -419,23 +377,19 @@ const config = {
       spawnTimer.remove();
       spawnTimer = null;
     }
-    
     gameOver = false;
     gameStarted = false;
     score = 0;
     speedMultiplier = 1;
     playerSpeed = 6;
-    
     if (player) { player.destroy(); player = null; }
     if (scoreText) { scoreText.destroy(); scoreText = null; }
     if (blocks) { blocks.clear(true, true); }
-    
     if (selectedMode === "normal") {
       maxBlocks = Phaser.Math.Between(modeSettings.normal.initialMinBlocks, modeSettings.normal.initialMaxBlocks);
     } else if (selectedMode === "asian") {
       maxBlocks = Phaser.Math.Between(modeSettings.asian.initialMinBlocks, modeSettings.asian.initialMaxBlocks);
     }
-    
     gameOverContainer.setVisible(false);
     createModeSelectionUI(scene);
   }
