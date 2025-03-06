@@ -19,12 +19,11 @@ const config = {
   
   let game = new Phaser.Game(config);
   
-  // Global variables for progression and mode selection
+  // Global variables for mode progression and selection
   let selectedMode; // "normal" or "asian"
   let speedMultiplier = 1;
   let nextSpeedIncreaseScore;
   let nextMaxBlocksIncreaseScore;
-  
   let playerSpeed = 6;
   
   const modeSettings = {
@@ -59,11 +58,14 @@ const config = {
   let spawnTimer = null;
   let gameOverShown = false;
   
+  // Global variable for the change name button (placed at the bottom)
+  let changeNameButton;
+  
   // -------------------------
   // FIREBASE LEADERBOARD & USER FUNCTIONS (Firestore)
   // -------------------------
   
-  // Register a unique name using the "users" collection.
+  // Register a unique name in "users" collection.
   async function registerUniqueName(name) {
     const docRef = db.collection("users").doc(name);
     const doc = await docRef.get();
@@ -75,7 +77,7 @@ const config = {
     }
   }
   
-  // Prompt the user for a unique name.
+  // Prompt for a unique name, even if one is stored locally.
   async function promptForUniqueName() {
     let name = prompt("Please enter your name:");
     if (!name) name = "Guest";
@@ -87,14 +89,32 @@ const config = {
     return name;
   }
   
-  // Submit the score to Firestore using a composite document ID (mode_name) to enforce one entry per name.
+  // Check if the stored name is still unique globally; if not, prompt again.
+  async function validateStoredName() {
+    let storedName = localStorage.getItem("playerName");
+    if (storedName) {
+      const unique = await registerUniqueName(storedName);
+      if (!unique) {
+        // If not unique, prompt for a new one.
+        storedName = await promptForUniqueName();
+        localStorage.setItem("playerName", storedName);
+      }
+      return storedName;
+    } else {
+      const newName = await promptForUniqueName();
+      localStorage.setItem("playerName", newName);
+      return newName;
+    }
+  }
+  
+  // Submit score to Firestore using a composite document ID (mode_name) to enforce one entry per name per mode.
   async function submitScoreFirestore(mode, name, score) {
     const docId = `${mode}_${name}`;
     const docRef = db.collection("scores").doc(docId);
     try {
       const doc = await docRef.get();
       if (doc.exists) {
-        // Update the score only if the new score is higher.
+        // Update only if new score is higher.
         if (score > doc.data().score) {
           await docRef.update({
             score: score,
@@ -105,7 +125,6 @@ const config = {
           console.log("Existing score is higher; not updating for", name);
         }
       } else {
-        // Create a new document.
         await docRef.set({
           mode: mode,
           name: name,
@@ -119,7 +138,7 @@ const config = {
     }
   }
   
-  // Retrieve the top 10 scores for a given mode.
+  // Retrieve top 10 scores for a given mode.
   async function getGlobalLeaderboard(mode) {
     try {
       const querySnapshot = await db.collection("scores")
@@ -191,7 +210,7 @@ const config = {
     }
     player.x = Phaser.Math.Clamp(player.x, player.width / 2, config.width - player.width / 2);
     
-    // Blocks movement and collision
+    // Blocks movement & collision
     blocks.getChildren().forEach(function(block) {
       block.speed = block.baseSpeed * speedMultiplier;
       block.y += block.speed * dt;
@@ -235,11 +254,9 @@ const config = {
   // MODE SELECTION UI & GAME START FUNCTIONS
   // -------------------------
   async function createModeSelectionUI(scene) {
-    let playerName = localStorage.getItem("playerName");
-    if (!playerName) {
-      playerName = await promptForUniqueName();
-      localStorage.setItem("playerName", playerName);
-    }
+    // Validate stored name globally. If invalid, prompt again.
+    let playerName = await validateStoredName();
+    localStorage.setItem("playerName", playerName);
     
     if (gameOverContainer) { gameOverContainer.destroy(); gameOverContainer = null; }
     if (modeContainer) { modeContainer.destroy(); modeContainer = null; }
@@ -300,7 +317,9 @@ const config = {
       align: 'center'
     }).setOrigin(0.5, 0);
     
-    let changeNameButton = scene.add.text(0, 110, "Change Name", {
+    // Remove change name button from the container and add it as a separate element at the bottom
+    if (changeNameButton) { changeNameButton.destroy(); }
+    changeNameButton = scene.add.text(config.width / 2, config.height - 30, "Change Name", {
       fontSize: '14px',
       fill: '#ff0',
       backgroundColor: '#000',
@@ -339,8 +358,7 @@ const config = {
       asianButton,
       personalHighscoreText,
       leaderboardNormalText,
-      leaderboardAsianText,
-      changeNameButton
+      leaderboardAsianText
     ]);
   }
   
