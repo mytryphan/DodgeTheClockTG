@@ -25,7 +25,7 @@ const config = {
   let nextSpeedIncreaseScore;
   let nextMaxBlocksIncreaseScore;
   
-  // Base player speed is now 24 (doubled from previous value of 12)
+  // Base player speed is 24
   let playerSpeed = 24;
   
   const modeSettings = {
@@ -59,6 +59,15 @@ const config = {
   let gameStarted = false;
   let spawnTimer = null;
   let gameOverShown = false;
+  
+  // New: Group for lasers and shooting control
+  let lasers;
+  let canShoot = false; // set true on pointerup so next tap can shoot
+  
+  // Laser ammo variables: starts at 0; gain 1 bullet per 5 points.
+  let laserAmmo = 0;
+  let lastScoreCheckpoint = 0; // used to track when to add ammo
+  let ammoText; // UI text to display ammo count
   
   // Global variable for the "Change Name" button
   let changeNameButton;
@@ -132,7 +141,8 @@ const config = {
     this.load.image('background', 'assets/background.png');
     this.load.image('player', 'assets/player.png');
     this.load.image('block', 'assets/block.png');
-    this.load.image('star', 'assets/star.png'); // New star asset
+    this.load.image('star', 'assets/star.png');
+    this.load.image('laser', 'assets/laser.png'); // Red laser asset
     this.load.image('gameOverBg', 'assets/game_over_bg.png');
     this.load.image('restartButton', 'assets/restart_button.png');
   }
@@ -144,6 +154,41 @@ const config = {
     background = this.add.image(0, 0, 'background')
       .setOrigin(0)
       .setDisplaySize(config.width, config.height);
+    
+    // Create groups for obstacles, lasers.
+    blocks = this.add.group();
+    lasers = this.add.group();
+    
+    // Create an ammo display at top-right.
+    ammoText = this.add.text(config.width - 150, 10, 'Ammo: 0', { fontSize: '20px', fill: '#fff' });
+    
+    // Show a tutorial overlay for laser shooting.
+    let tutorialText = this.add.text(config.width / 2, config.height / 2, "Tap to shoot laser!\nRemove finger then tap again to fire.", {
+      fontSize: '24px',
+      fill: '#fff',
+      align: 'center'
+    }).setOrigin(0.5);
+    this.tweens.add({
+      targets: tutorialText,
+      alpha: 0,
+      duration: 5000,
+      onComplete: () => tutorialText.destroy()
+    });
+    
+    // Input events for shooting:
+    this.input.on('pointerup', () => {
+      canShoot = true;
+    });
+    this.input.on('pointerdown', (pointer) => {
+      // If allowed to shoot and there is ammo, shoot laser.
+      if (canShoot && laserAmmo > 0) {
+        shootLaser.call(this);
+        laserAmmo--;
+        ammoText.setText('Ammo: ' + laserAmmo);
+        canShoot = false;
+      }
+    });
+    
     createModeSelectionUI(this);
   }
   
@@ -170,32 +215,57 @@ const config = {
     }
     player.x = Phaser.Math.Clamp(player.x, player.width / 2, config.width - player.width / 2);
     
-    // Process obstacles (blocks or stars)
+    // Update lasers: move upward and check collision with blocks.
+    lasers.getChildren().forEach(function(laser) {
+      laser.y -= laser.speed * dt;
+      if (laser.y < 0) {
+        laser.destroy();
+      } else {
+        blocks.getChildren().forEach(function(obstacle) {
+          if (obstacle.type === "block" && checkCollision(laser, obstacle)) {
+            obstacle.destroy();
+            laser.destroy();
+            // Optionally add bonus points for hitting a block with a laser.
+            score += 5;
+            scoreText.setText('Score: ' + score);
+          }
+        });
+      }
+    });
+    
+    // Blocks movement & collision (and star collection)
     blocks.getChildren().forEach(function(obstacle) {
       obstacle.speed = obstacle.baseSpeed * speedMultiplier;
       obstacle.y += obstacle.speed * dt;
       
       if (checkCollision(player, obstacle)) {
         if (obstacle.type === "star") {
-          // Collect the star: increase score by 10 and destroy the star.
+          // Collect the star: +10 score.
           score += 10;
           scoreText.setText('Score: ' + score);
           obstacle.destroy();
-        } else {
-          // For blocks, trigger game over.
+        } else if (obstacle.type === "block") {
+          // Collision with block causes game over.
           showGameOver();
         }
       }
       
       if (obstacle.y > config.height) {
         obstacle.destroy();
-        // For blocks only: increment score by 1 (as before).
         if (obstacle.type === "block") {
           score++;
           scoreText.setText('Score: ' + score);
         }
       }
     });
+    
+    // Update laser ammo based on score: gain 1 bullet per every 5 points.
+    if (score - lastScoreCheckpoint >= 5) {
+      let bonus = Math.floor((score - lastScoreCheckpoint) / 5);
+      laserAmmo += bonus;
+      lastScoreCheckpoint += bonus * 5;
+      ammoText.setText('Ammo: ' + laserAmmo);
+    }
     
     // Progression logic (unchanged)
     let threshold = modeSettings[selectedMode].threshold;
@@ -224,50 +294,15 @@ const config = {
   }
   
   // -------------------------
-  // SPAWN FUNCTION: Spawns an obstacle which is either a block or (10% chance) a star
+  // SHOOT LASER FUNCTION
   // -------------------------
-  function spawnBlock() {
-    if (gameOver) return;
-    if (blocks.getLength() < maxBlocks) {
-      // 10% chance to spawn a star instead of a block.
-      let isStar = Math.random() < 0.10;
-      let obstacle;
-      if (isStar) {
-        obstacle = this.add.image(
-          Phaser.Math.Between(40, config.width - 40),
-          0,
-          'star'
-        ).setOrigin(0.5).setDisplaySize(40, 40);
-        obstacle.type = "star";
-      } else {
-        obstacle = this.add.image(
-          Phaser.Math.Between(40, config.width - 40),
-          0,
-          'block'
-        ).setOrigin(0.5).setDisplaySize(40, 40);
-        obstacle.type = "block";
-      }
-      // Set baseSpeed from the mode settings
-      if (selectedMode === "normal") {
-        obstacle.baseSpeed = Phaser.Math.Between(
-          modeSettings.normal.blockSpeedMin,
-          modeSettings.normal.blockSpeedMax
-        );
-      } else if (selectedMode === "asian") {
-        obstacle.baseSpeed = Phaser.Math.Between(
-          modeSettings.asian.blockSpeedMin,
-          modeSettings.asian.blockSpeedMax
-        );
-      }
-      obstacle.speed = obstacle.baseSpeed * speedMultiplier;
-      blocks.add(obstacle);
-    }
-  }
-  
-  function checkCollision(spriteA, spriteB) {
-    const boundsA = spriteA.getBounds();
-    const boundsB = spriteB.getBounds();
-    return Phaser.Geom.Intersects.RectangleToRectangle(boundsA, boundsB);
+  function shootLaser() {
+    // Create a laser at the player's current position.
+    let laser = this.add.image(player.x, player.y - player.height / 2, 'laser')
+      .setOrigin(0.5)
+      .setDisplaySize(10, 30);
+    laser.speed = 300; // Laser speed (adjust as needed)
+    lasers.add(laser);
   }
   
   // -------------------------
@@ -282,7 +317,7 @@ const config = {
     }
     const currentPlayerName = storedName;
     
-    // Clear any previous UI elements.
+    // Clear previous UI elements.
     if (gameOverContainer) { gameOverContainer.destroy(); gameOverContainer = null; }
     if (modeContainer) { modeContainer.destroy(); modeContainer = null; }
     
@@ -410,7 +445,7 @@ const config = {
     cursors = scene.input.keyboard.createCursorKeys();
     scene.input.on('pointerdown', (pointer) => { targetX = pointer.x; });
     scene.input.on('pointermove', (pointer) => { targetX = pointer.x; });
-    scene.input.on('pointerup', () => { targetX = null; });
+    scene.input.on('pointerup', () => { targetX = null; canShoot = true; });
     
     blocks = scene.add.group();
     
@@ -433,7 +468,7 @@ const config = {
   function spawnBlock() {
     if (gameOver) return;
     if (blocks.getLength() < maxBlocks) {
-      // 10% chance for a star instead of a block.
+      // 10% chance for a star, otherwise spawn a block.
       let isStar = Math.random() < 0.10;
       let obstacle;
       if (isStar) {
@@ -533,7 +568,7 @@ const config = {
     gameStarted = false;
     score = 0;
     speedMultiplier = 1;
-    playerSpeed = 24; // Reset to base speed (24)
+    playerSpeed = 24;
     gameOverShown = false;
     
     if (player) { player.destroy(); player = null; }
