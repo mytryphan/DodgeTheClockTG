@@ -59,7 +59,7 @@ const config = {
   let spawnTimer = null;
   let gameOverShown = false;
   
-  // Global variable for the "Change Name" button placed at the very bottom
+  // Global variable for the "Change Name" button
   let changeNameButton;
   
   // -------------------------
@@ -241,7 +241,7 @@ const config = {
     let personalHighscoreNormal = localStorage.getItem('highscore_normal') || 0;
     let personalHighscoreAsian = localStorage.getItem('highscore_asian') || 0;
     
-    // Position container at 40% of screen height for a better fit.
+    // Position container at 40% of screen height
     modeContainer = scene.add.container(config.width / 2, config.height * 0.4);
     modeContainer.setDepth(100);
     
@@ -295,7 +295,7 @@ const config = {
       align: 'center'
     }).setOrigin(0.5, 0);
     
-    // Place the Change Name button outside the container at the very bottom.
+    // Create "Change Name" button outside the container at the bottom.
     if (changeNameButton) { changeNameButton.destroy(); }
     changeNameButton = scene.add.text(config.width / 2, config.height - 30, "Change Name", {
       fontSize: '14px',
@@ -350,7 +350,9 @@ const config = {
   
   function startGame(scene) {
     gameStarted = true;
+    // Destroy the mode container and the change name button so they are not visible during gameplay.
     if (modeContainer) { modeContainer.destroy(); modeContainer = null; }
+    if (changeNameButton) { changeNameButton.destroy(); changeNameButton = null; }
     
     player = scene.add.image(config.width / 2, config.height - 80, 'player')
       .setOrigin(0.5)
