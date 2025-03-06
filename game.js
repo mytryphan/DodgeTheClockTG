@@ -25,7 +25,7 @@ const config = {
   let nextSpeedIncreaseScore;
   let nextMaxBlocksIncreaseScore;
   
-  // Base player speed is now doubled: set to 24 (instead of 6 or 12)
+  // Base player speed (doubled; default is now 24)
   let playerSpeed = 24;
   
   const modeSettings = {
@@ -66,12 +66,16 @@ const config = {
   // -------------------------
   // FIREBASE LEADERBOARD & USER FUNCTIONS (Firestore)
   // -------------------------
+  
+  // Checks for uniqueness by creating a document in "users" collection.
+  // If the document exists, the name is already taken.
   async function registerUniqueName(name) {
     const docRef = db.collection("users").doc(name);
     const doc = await docRef.get();
     return !doc.exists;
   }
   
+  // Prompt for a unique name (only used if none is stored)
   async function promptForUniqueName() {
     let name = prompt("Please enter your name:");
     if (!name) name = "Guest";
@@ -83,35 +87,22 @@ const config = {
     return name;
   }
   
+  // Submit the score as a new document for every run (no composite ID).
   async function submitScoreFirestore(mode, name, score) {
-    const docId = `${mode}_${name}`;
-    const docRef = db.collection("scores").doc(docId);
     try {
-      const doc = await docRef.get();
-      if (doc.exists) {
-        if (score > doc.data().score) {
-          await docRef.update({
-            score: score,
-            timestamp: firebase.firestore.FieldValue.serverTimestamp()
-          });
-          console.log("Score updated for", name);
-        } else {
-          console.log("Existing score is higher; not updating for", name);
-        }
-      } else {
-        await docRef.set({
-          mode: mode,
-          name: name,
-          score: score,
-          timestamp: firebase.firestore.FieldValue.serverTimestamp()
-        });
-        console.log("Score created for", name);
-      }
+      await db.collection("scores").add({
+        mode: mode,
+        name: name,
+        score: score,
+        timestamp: firebase.firestore.FieldValue.serverTimestamp()
+      });
+      console.log("Score submitted for", name);
     } catch (err) {
       console.error("Error in submitScoreFirestore:", err);
     }
   }
   
+  // Retrieve the top 10 runs (ordered by score descending)
   async function getGlobalLeaderboard(mode) {
     try {
       const querySnapshot = await db.collection("scores")
@@ -227,7 +218,7 @@ const config = {
   // MODE SELECTION UI & GAME START FUNCTIONS
   // -------------------------
   async function createModeSelectionUI(scene) {
-    // Use the stored name from localStorage; only prompt if not present.
+    // Check for stored name; if exists, use it; if not, prompt once.
     let storedName = localStorage.getItem("playerName");
     if (!storedName) {
       storedName = await promptForUniqueName();
@@ -235,14 +226,14 @@ const config = {
     }
     const currentPlayerName = storedName;
     
-    // Clear any previous UI elements
+    // Clear any previous UI elements.
     if (gameOverContainer) { gameOverContainer.destroy(); gameOverContainer = null; }
     if (modeContainer) { modeContainer.destroy(); modeContainer = null; }
     
     let personalHighscoreNormal = localStorage.getItem('highscore_normal') || 0;
     let personalHighscoreAsian = localStorage.getItem('highscore_asian') || 0;
     
-    // Position container at 40% of screen height
+    // Position container at 40% of screen height.
     modeContainer = scene.add.container(config.width / 2, config.height * 0.4);
     modeContainer.setDepth(100);
     
@@ -344,7 +335,6 @@ const config = {
   function setMode(mode) {
     selectedMode = mode;
     speedMultiplier = 1;
-    // Ensure base speed is 24 everywhere.
     playerSpeed = 24;
     nextSpeedIncreaseScore = modeSettings[mode].threshold;
     nextMaxBlocksIncreaseScore = (mode === "normal") ? modeSettings[mode].threshold * 2 : modeSettings[mode].threshold;
@@ -468,7 +458,7 @@ const config = {
     gameStarted = false;
     score = 0;
     speedMultiplier = 1;
-    playerSpeed = 24; // Reset to the new base speed (24)
+    playerSpeed = 24; // Reset to base speed (24)
     gameOverShown = false;
     
     if (player) { player.destroy(); player = null; }
