@@ -19,7 +19,7 @@ const config = {
   
   let game = new Phaser.Game(config);
   
-  // Global variables for progression and mode selection
+  // Global variables for mode progression and selection
   let selectedMode; // "normal" or "asian"
   let speedMultiplier = 1;
   let nextSpeedIncreaseScore;
@@ -59,16 +59,9 @@ const config = {
   let spawnTimer = null;
   let gameOverShown = false;
   
-  // Firestore reference (initialized in index.html)
-  const db = firebase.firestore();
-  
   // -------------------------
-  // FIREBASE LEADERBOARD & USER FUNCTIONS
+  // FIREBASE LEADERBOARD & USER FUNCTIONS (Firestore)
   // -------------------------
-  
-  // Enforce unique names by using a separate "users" collection.
-  // This function attempts to register the name.
-  // If the document with the given name exists, then the name is taken.
   async function registerUniqueName(name) {
     const docRef = db.collection("users").doc(name);
     const doc = await docRef.get();
@@ -80,7 +73,6 @@ const config = {
     }
   }
   
-  // Prompt user for a unique name
   async function promptForUniqueName() {
     let name = prompt("Please enter your name:");
     if (!name) name = "Guest";
@@ -92,15 +84,12 @@ const config = {
     return name;
   }
   
-  // Submit score to Firestore with one entry per name per mode.
-  // Uses a composite document id: mode + "_" + name.
   async function submitScoreFirestore(mode, name, score) {
     const docId = `${mode}_${name}`;
     const docRef = db.collection("scores").doc(docId);
     try {
       const doc = await docRef.get();
       if (doc.exists) {
-        // If the new score is higher, update it.
         if (score > doc.data().score) {
           await docRef.update({
             score: score,
@@ -111,7 +100,6 @@ const config = {
           console.log("Existing score is higher; not updating for", name);
         }
       } else {
-        // Create a new document.
         await docRef.set({
           mode: mode,
           name: name,
@@ -125,7 +113,6 @@ const config = {
     }
   }
   
-  // Retrieve top 10 scores for a given mode
   async function getGlobalLeaderboard(mode) {
     try {
       const querySnapshot = await db.collection("scores")
@@ -171,7 +158,6 @@ const config = {
     background = this.add.image(0, 0, 'background')
       .setOrigin(0)
       .setDisplaySize(config.width, config.height);
-      
     createModeSelectionUI(this);
   }
   
@@ -182,7 +168,7 @@ const config = {
     if (!gameStarted || gameOver) return;
     let dt = delta / 16.67;
     
-    // Player movement
+    // Player Movement
     if (cursors.left.isDown) {
       player.x -= playerSpeed * dt;
     } else if (cursors.right.isDown) {
@@ -198,7 +184,7 @@ const config = {
     }
     player.x = Phaser.Math.Clamp(player.x, player.width / 2, config.width - player.width / 2);
     
-    // Blocks movement & collision
+    // Blocks Movement & Collision
     blocks.getChildren().forEach(function(block) {
       block.speed = block.baseSpeed * speedMultiplier;
       block.y += block.speed * dt;
@@ -212,7 +198,7 @@ const config = {
       }
     });
     
-    // Progression logic
+    // Progression
     let threshold = modeSettings[selectedMode].threshold;
     if (score >= nextSpeedIncreaseScore) {
       speedMultiplier *= modeSettings[selectedMode].speedIncreaseFactor;
@@ -242,7 +228,6 @@ const config = {
   // MODE SELECTION UI & GAME START FUNCTIONS
   // -------------------------
   async function createModeSelectionUI(scene) {
-    // Get player's name; if not set, prompt for a unique name.
     let playerName = localStorage.getItem("playerName");
     if (!playerName) {
       playerName = await promptForUniqueName();
@@ -291,9 +276,9 @@ const config = {
       align: 'center'
     }).setOrigin(0.5);
     
-    // Leaderboard columns fetched from Firestore
     let leaderboardNormal = await getGlobalLeaderboard("normal");
     let leaderboardAsian = await getGlobalLeaderboard("asian");
+    
     let leaderboardNormalText = scene.add.text(-config.width / 4, 80, 
       "Normal:\n" + formatLeaderboardFromData(leaderboardNormal), {
       fontSize: '14px',
@@ -333,7 +318,6 @@ const config = {
       modeContainer.destroy();
       startGame(scene);
     });
-    
     asianButton.on('pointerdown', function() {
       setMode("asian");
       modeContainer.destroy();
@@ -352,7 +336,6 @@ const config = {
     ]);
   }
   
-  // Checks if a name is unique across all modes using the "users" collection.
   async function registerUniqueName(name) {
     const docRef = db.collection("users").doc(name);
     const doc = await docRef.get();
@@ -364,7 +347,6 @@ const config = {
     }
   }
   
-  // Prompt for a unique name (recursively if needed).
   async function promptForUniqueName() {
     let name = prompt("Please enter your name:");
     if (!name) name = "Guest";
@@ -417,6 +399,9 @@ const config = {
     createGameOverUI(scene);
   }
   
+  // -------------------------
+  // BLOCK SPAWNING & COLLISION
+  // -------------------------
   function spawnBlock() {
     if (gameOver) return;
     if (blocks.getLength() < maxBlocks) {
@@ -441,6 +426,9 @@ const config = {
     return Phaser.Geom.Intersects.RectangleToRectangle(boundsA, boundsB);
   }
   
+  // -------------------------
+  // GAME OVER & RESTART UI
+  // -------------------------
   function createGameOverUI(scene) {
     if (gameOverContainer) return;
     gameOverContainer = scene.add.container(config.width / 2, config.height / 2);
