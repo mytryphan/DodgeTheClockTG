@@ -62,12 +62,12 @@ const config = {
   
   // New: Groups for lasers and shooting control
   let lasers;
-  let canShoot = false; // Flag to allow shooting on pointerdown after pointerup
+  let canShoot = false; // becomes true on pointerup
   
-  // Laser ammo variables
+  // Laser ammo: starts at 0; gain 1 per every 5 points
   let laserAmmo = 0;
   let lastScoreCheckpoint = 0;
-  let ammoText; // UI display for ammo count
+  let ammoText; // UI display for ammo
   
   // Global variable for the "Change Name" button
   let changeNameButton;
@@ -142,7 +142,7 @@ const config = {
     this.load.image('player', 'assets/player.png');
     this.load.image('block', 'assets/block.png');
     this.load.image('star', 'assets/star.png');
-    // Do not load a PNG for laser; we'll create a vector-based laser texture.
+    // We no longer load a PNG for laser.
     this.load.image('gameOverBg', 'assets/game_over_bg.png');
     this.load.image('restartButton', 'assets/restart_button.png');
   }
@@ -155,35 +155,37 @@ const config = {
       .setOrigin(0)
       .setDisplaySize(config.width, config.height);
     
-    // Generate a red laser texture as a vector graphic.
-    // Draw a red rectangle (10x30) and generate a texture called 'laser'
+    // Generate a red laser texture using vector graphics.
     let laserGraphics = this.add.graphics();
     laserGraphics.fillStyle(0xff0000, 1);
     laserGraphics.fillRect(0, 0, 10, 30);
     laserGraphics.generateTexture('laser', 10, 30);
     laserGraphics.destroy();
     
-    // Create groups for obstacles, lasers.
+    // Create groups for obstacles and lasers.
     blocks = this.add.group();
     lasers = this.add.group();
     
-    // Create an ammo display at the top-right.
+    // Create an ammo display at top-right.
     ammoText = this.add.text(config.width - 150, 10, 'Ammo: 0', { fontSize: '20px', fill: '#fff' });
     
-    // Tutorial overlay for laser shooting.
-    let tutorialText = this.add.text(config.width / 2, config.height / 2, "Tap to shoot laser!\nLift finger then tap again.", {
-      fontSize: '24px',
-      fill: '#fff',
-      align: 'center'
-    }).setOrigin(0.5);
-    this.tweens.add({
-      targets: tutorialText,
-      alpha: 0,
-      duration: 5000,
-      onComplete: () => tutorialText.destroy()
-    });
+    // Show tutorial overlay for laser shooting only on first launch.
+    if (!localStorage.getItem("tutorialShown")) {
+      let tutorialText = this.add.text(config.width / 2, config.height / 2, "Tap to shoot a laser!\nLift your finger, then tap again to fire.", {
+        fontSize: '24px',
+        fill: '#fff',
+        align: 'center'
+      }).setOrigin(0.5);
+      this.tweens.add({
+        targets: tutorialText,
+        alpha: 0,
+        duration: 5000,
+        onComplete: () => tutorialText.destroy()
+      });
+      localStorage.setItem("tutorialShown", "true");
+    }
     
-    // Input events for shooting: pointerup enables shooting; pointerdown fires if ammo available.
+    // Set up input events for shooting.
     this.input.on('pointerup', () => {
       canShoot = true;
     });
@@ -222,7 +224,7 @@ const config = {
     }
     player.x = Phaser.Math.Clamp(player.x, player.width / 2, config.width - player.width / 2);
     
-    // Update lasers: move upward, check collisions with blocks.
+    // Update lasers: move upward and check collision with blocks.
     lasers.getChildren().forEach(function(laser) {
       laser.y -= laser.speed * dt;
       if (laser.y < 0) {
@@ -232,7 +234,7 @@ const config = {
           if (obstacle.type === "block" && checkCollision(laser, obstacle)) {
             obstacle.destroy();
             laser.destroy();
-            score += 5; // Bonus for hitting a block.
+            score += 5; // Bonus points for hitting a block with a laser.
             scoreText.setText('Score: ' + score);
           }
         });
@@ -263,7 +265,7 @@ const config = {
       }
     });
     
-    // Update laser ammo: gain 1 bullet for every 5 points scored.
+    // Update laser ammo: gain 1 bullet per 5 points.
     if (score - lastScoreCheckpoint >= 5) {
       let bonus = Math.floor((score - lastScoreCheckpoint) / 5);
       laserAmmo += bonus;
@@ -304,7 +306,7 @@ const config = {
     let laser = this.add.image(player.x, player.y - player.height / 2, 'laser')
       .setOrigin(0.5)
       .setDisplaySize(10, 30);
-    laser.speed = 300;
+    laser.speed = 300; // Adjust laser speed as needed
     lasers.add(laser);
   }
   
@@ -312,6 +314,7 @@ const config = {
   // MODE SELECTION UI & GAME START FUNCTIONS
   // -------------------------
   async function createModeSelectionUI(scene) {
+    // Check for stored name; if exists, use it; if not, prompt once.
     let storedName = localStorage.getItem("playerName");
     if (!storedName) {
       storedName = await promptForUniqueName();
@@ -319,12 +322,14 @@ const config = {
     }
     const currentPlayerName = storedName;
     
+    // Clear previous UI elements.
     if (gameOverContainer) { gameOverContainer.destroy(); gameOverContainer = null; }
     if (modeContainer) { modeContainer.destroy(); modeContainer = null; }
     
     let personalHighscoreNormal = localStorage.getItem('highscore_normal') || 0;
     let personalHighscoreAsian = localStorage.getItem('highscore_asian') || 0;
     
+    // Position container at 40% of screen height.
     modeContainer = scene.add.container(config.width / 2, config.height * 0.4);
     modeContainer.setDepth(100);
     
@@ -378,6 +383,7 @@ const config = {
       align: 'center'
     }).setOrigin(0.5, 0);
     
+    // Place the Change Name button at the very bottom of the screen (outside the container)
     if (changeNameButton) { changeNameButton.destroy(); }
     changeNameButton = scene.add.text(config.width / 2, config.height - 30, "Change Name", {
       fontSize: '14px',
