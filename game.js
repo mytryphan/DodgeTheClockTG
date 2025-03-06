@@ -5,7 +5,7 @@ const config = {
     type: Phaser.AUTO,
     width: window.innerWidth,
     height: window.innerHeight,
-    parent: 'game-container',
+    parent: 'game-container', // ID of the HTML element where the game renders
     scale: {
       mode: Phaser.Scale.FIT,
       autoCenter: Phaser.Scale.CENTER_BOTH,
@@ -23,7 +23,7 @@ const config = {
   let selectedMode;  // "normal" or "asian"
   let speedMultiplier = 1;         // For block speed progression
   let nextSpeedIncreaseScore;      // Score threshold for next speed increase
-  let nextMaxBlocksIncreaseScore;  // Score threshold for next increase in maximum blocks
+  let nextMaxBlocksIncreaseScore;  // Score threshold for next increase in max blocks
   
   // Global player speed variable
   let playerSpeed = 6; // Initial player speed
@@ -60,15 +60,43 @@ const config = {
   let maxBlocks; // Current maximum allowed blocks on screen
   let gameStarted = false; // Indicates if game has started (after mode selection)
   let spawnTimer = null; // Timer for block spawning
+  let gameOverShown = false; // Guard to ensure game-over triggers only once
   
   // -------------------------
-  // LEADERBOARD HELPER FUNCTIONS (Using FaunaDB via Netlify Functions)
-  // For persistent global leaderboard, we'll use Netlify Functions.
-  // For now, our in-game leaderboard functions (formatLeaderboard) remain as a fallback.
+  // LEADERBOARD HELPER FUNCTIONS (Using Netlify Functions / LocalStorage demo)
   // -------------------------
+  function submitScore(mode, name, score) {
+    fetch('https://dodgetheblock.netlify.app/.netlify/functions/submit-score', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ mode, name, score })
+    })
+      .then(res => res.json())
+      .then(data => console.log("Score submitted", data))
+      .catch(err => console.error("Error submitting score", err));
+  }
+  
+  function fetchLeaderboard(mode, callback) {
+    fetch(`https://dodgetheblock.netlify.app/.netlify/functions/get-leaderboard?mode=${mode}`)
+      .then(res => res.json())
+      .then(data => callback(data.leaderboard))
+      .catch(err => {
+        console.error("Error fetching leaderboard", err);
+        callback(null);
+      });
+  }
+  
+  function formatLeaderboardFromData(data) {
+    let text = "";
+    if (!data || data.length === 0) return "No entries";
+    for (let i = 0; i < data.length; i++) {
+      text += `${i + 1}. ${data[i].name} - ${data[i].score}\n`;
+    }
+    return text;
+  }
+  
   function formatLeaderboard(mode) {
-    // This function should fetch from the server.
-    // For demo purposes, we'll return a placeholder.
+    // For demo, we fetch from localStorage (or use a placeholder)
     return "Loading...";
   }
   
@@ -161,6 +189,7 @@ const config = {
   // MODE SELECTION UI & GAME START FUNCTIONS
   // -------------------------
   function createModeSelectionUI(scene) {
+    // Ask for player's name if not stored.
     let playerName = localStorage.getItem("playerName");
     if (!playerName) {
       playerName = prompt("Please enter your name:");
@@ -168,69 +197,65 @@ const config = {
       localStorage.setItem("playerName", playerName);
     }
     
-    if (gameOverContainer) {
-      gameOverContainer.destroy();
-      gameOverContainer = null;
-    }
-    if (modeContainer) {
-      modeContainer.destroy();
-      modeContainer = null;
-    }
+    // Clean up any existing UI containers.
+    if (gameOverContainer) { gameOverContainer.destroy(); gameOverContainer = null; }
+    if (modeContainer) { modeContainer.destroy(); modeContainer = null; }
     
     let personalHighscoreNormal = localStorage.getItem('highscore_normal') || 0;
     let personalHighscoreAsian = localStorage.getItem('highscore_asian') || 0;
     
-    modeContainer = scene.add.container(config.width / 2, config.height / 4);
+    // Create mode selection container at 30% of screen height.
+    modeContainer = scene.add.container(config.width / 2, config.height * 0.3);
     modeContainer.setDepth(100);
     
-    let playerNameText = scene.add.text(0, -120, `Hello, ${playerName}!`, {
+    let playerNameText = scene.add.text(0, -100, `Hello, ${playerName}!`, {
       fontSize: '24px',
       fill: '#fff',
       align: 'center'
     }).setOrigin(0.5);
     
-    let modeTitleText = scene.add.text(0, -80, "Select Game Mode", {
+    let modeTitleText = scene.add.text(0, -60, "Select Game Mode", {
       fontSize: '28px',
       fill: '#fff',
       align: 'center'
     }).setOrigin(0.5);
     
-    let normalButton = scene.add.text(0, -20, "Normal Mode", {
+    let normalButton = scene.add.text(0, -10, "Normal Mode", {
       fontSize: '28px',
       fill: '#fff',
       backgroundColor: '#000',
       padding: { x: 10, y: 5 }
     }).setOrigin(0.5).setInteractive();
     
-    let asianButton = scene.add.text(0, 30, "Asian Normal Mode", {
+    let asianButton = scene.add.text(0, 40, "Asian Normal Mode", {
       fontSize: '28px',
       fill: '#fff',
       backgroundColor: '#000',
       padding: { x: 10, y: 5 }
     }).setOrigin(0.5).setInteractive();
     
-    let personalHighscoreText = scene.add.text(0, 70, 
+    let personalHighscoreText = scene.add.text(0, 80, 
       `Your Highscore:\nNormal: ${personalHighscoreNormal}   Asian: ${personalHighscoreAsian}`, {
-      fontSize: '16px', // Made smaller for mobile
+      fontSize: '16px',
       fill: '#fff',
       align: 'center'
     }).setOrigin(0.5);
     
-    let leaderboardNormalText = scene.add.text(-config.width / 4, 100, 
+    let leaderboardNormalText = scene.add.text(-config.width / 4, 110, 
       "Normal:\n" + formatLeaderboard("normal"), {
       fontSize: '16px',
       fill: '#fff',
       align: 'center'
     }).setOrigin(0.5, 0);
     
-    let leaderboardAsianText = scene.add.text(config.width / 4, 100, 
+    let leaderboardAsianText = scene.add.text(config.width / 4, 110, 
       "Asian:\n" + formatLeaderboard("asian"), {
       fontSize: '16px',
       fill: '#fff',
       align: 'center'
     }).setOrigin(0.5, 0);
     
-    let changeNameButton = scene.add.text(0, 150, "Change Name", {
+    let changeNameButton = scene.add.text(0, 160, "Change Name", {
       fontSize: '16px',
       fill: '#ff0',
       backgroundColor: '#000',
@@ -256,7 +281,16 @@ const config = {
       startGame(scene);
     });
     
-    modeContainer.add([playerNameText, modeTitleText, normalButton, asianButton, personalHighscoreText, leaderboardNormalText, leaderboardAsianText, changeNameButton]);
+    modeContainer.add([
+      playerNameText,
+      modeTitleText,
+      normalButton,
+      asianButton,
+      personalHighscoreText,
+      leaderboardNormalText,
+      leaderboardAsianText,
+      changeNameButton
+    ]);
   }
   
   function setMode(mode) {
@@ -269,31 +303,35 @@ const config = {
   
   function startGame(scene) {
     gameStarted = true;
-    if (modeContainer) {
-      modeContainer.destroy();
-      modeContainer = null;
-    }
+    if (modeContainer) { modeContainer.destroy(); modeContainer = null; }
+    
     player = scene.add.image(config.width / 2, config.height - 80, 'player')
       .setOrigin(0.5)
       .setDisplaySize(40, 40);
+    
     score = 0;
     scoreText = scene.add.text(10, 10, 'Score: 0', { fontSize: '20px', fill: '#fff' });
+    
     cursors = scene.input.keyboard.createCursorKeys();
     scene.input.on('pointerdown', (pointer) => { targetX = pointer.x; });
     scene.input.on('pointermove', (pointer) => { targetX = pointer.x; });
     scene.input.on('pointerup', () => { targetX = null; });
+    
     blocks = scene.add.group();
+    
     if (selectedMode === "normal") {
       maxBlocks = Phaser.Math.Between(modeSettings.normal.initialMinBlocks, modeSettings.normal.initialMaxBlocks);
     } else if (selectedMode === "asian") {
       maxBlocks = Phaser.Math.Between(modeSettings.asian.initialMinBlocks, modeSettings.asian.initialMaxBlocks);
     }
+    
     spawnTimer = scene.time.addEvent({
       delay: modeSettings[selectedMode].spawnDelay,
       callback: spawnBlock,
       callbackScope: scene,
       loop: true
     });
+    
     createGameOverUI(scene);
   }
   
@@ -332,6 +370,7 @@ const config = {
     gameOverContainer = scene.add.container(config.width / 2, config.height / 2);
     gameOverContainer.setDepth(100);
     gameOverContainer.setVisible(false);
+    
     let gameOverBg = scene.add.image(0, 0, 'gameOverBg')
       .setOrigin(0.5)
       .setDisplaySize(300, 200);
@@ -349,14 +388,28 @@ const config = {
       .setOrigin(0.5)
       .setInteractive();
     restartButton.on('pointerdown', () => { restartGame(scene); });
+    
     gameOverContainer.add([gameOverBg, gameOverText, finalScoreText, restartButton]);
   }
   
   function showGameOver() {
+    if (gameOverShown) return;
     gameOver = true;
+    gameOverShown = true;
     gameOverContainer.setVisible(true);
     gameOverContainer.getAt(2).setText('Score: ' + score);
+    
     let playerName = localStorage.getItem("playerName") || "Guest";
+    
+    fetch('https://dodgetheblock.netlify.app/.netlify/functions/submit-score', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ mode: selectedMode, name: playerName, score: score })
+    })
+      .then(res => res.json())
+      .then(data => console.log("Score submitted", data))
+      .catch(err => console.error("Error submitting score", err));
+    
     if (selectedMode === "normal") {
       let hs = localStorage.getItem('highscore_normal') || 0;
       if (score > hs) {
@@ -377,19 +430,24 @@ const config = {
       spawnTimer.remove();
       spawnTimer = null;
     }
+    
     gameOver = false;
     gameStarted = false;
     score = 0;
     speedMultiplier = 1;
     playerSpeed = 6;
+    gameOverShown = false;
+    
     if (player) { player.destroy(); player = null; }
     if (scoreText) { scoreText.destroy(); scoreText = null; }
     if (blocks) { blocks.clear(true, true); }
+    
     if (selectedMode === "normal") {
       maxBlocks = Phaser.Math.Between(modeSettings.normal.initialMinBlocks, modeSettings.normal.initialMaxBlocks);
     } else if (selectedMode === "asian") {
       maxBlocks = Phaser.Math.Between(modeSettings.asian.initialMinBlocks, modeSettings.asian.initialMaxBlocks);
     }
+    
     gameOverContainer.setVisible(false);
     createModeSelectionUI(scene);
   }
