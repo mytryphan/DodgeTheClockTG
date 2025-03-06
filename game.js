@@ -5,7 +5,7 @@ const config = {
     type: Phaser.AUTO,
     width: window.innerWidth,
     height: window.innerHeight,
-    parent: 'game-container', // ID of the HTML element where the game renders
+    parent: 'game-container', // The HTML element where the game renders
     scale: {
       mode: Phaser.Scale.FIT,
       autoCenter: Phaser.Scale.CENTER_BOTH,
@@ -19,11 +19,11 @@ const config = {
   
   let game = new Phaser.Game(config);
   
-  // Global variables for progression and mode selection
-  let selectedMode;  // "normal" or "asian"
+  // Global variables for mode progression and selection
+  let selectedMode; // "normal" or "asian"
   let speedMultiplier = 1;         // For block speed progression
-  let nextSpeedIncreaseScore;      // Score threshold for next speed increase
-  let nextMaxBlocksIncreaseScore;  // Score threshold for next increase in max blocks
+  let nextSpeedIncreaseScore;      // Next score threshold for speed/player increase
+  let nextMaxBlocksIncreaseScore;  // Next score threshold for increasing max blocks
   
   // Global player speed variable
   let playerSpeed = 6; // Initial player speed
@@ -37,8 +37,8 @@ const config = {
       blockSpeedMax: 10,
       spawnDelay: 500, // ms
       speedIncreaseFactor: 1.05, // 5% block speed increase every threshold
-      maxBlockIncrease: 1,       // Increase max blocks by 1 every threshold (applied every 20 scores)
-      threshold: 10              // Every 10 scores for speed and player; for max blocks, threshold is 20 scores
+      maxBlockIncrease: 1,       // Increase max blocks by 1 (applied every 20 scores)
+      threshold: 10              // Every 10 scores for speed/player; max blocks threshold is 20 scores
     },
     asian: {
       initialMinBlocks: 2,
@@ -47,7 +47,7 @@ const config = {
       blockSpeedMax: 13,
       spawnDelay: 300, // ms
       speedIncreaseFactor: 1.10, // 10% block speed increase every threshold
-      maxBlockIncrease: 2,       // Increase max blocks by 2 every threshold (applied every 10 scores)
+      maxBlockIncrease: 2,       // Increase max blocks by 2 (applied every 10 scores)
       threshold: 10              // Every 10 scores for both
     }
   };
@@ -60,7 +60,7 @@ const config = {
   let maxBlocks; // Current maximum allowed blocks on screen
   let gameStarted = false; // Indicates if game has started (after mode selection)
   let spawnTimer = null; // Timer for block spawning
-  let gameOverShown = false; // Guard to ensure game-over triggers only once
+  let gameOverShown = false; // Ensures game-over is triggered only once
   
   // -------------------------
   // LEADERBOARD HELPER FUNCTIONS (Using Netlify Functions / LocalStorage demo)
@@ -95,8 +95,8 @@ const config = {
     return text;
   }
   
+  // For demo, use a placeholder function:
   function formatLeaderboard(mode) {
-    // For demo, we fetch from localStorage (or use a placeholder)
     return "Loading...";
   }
   
@@ -189,7 +189,7 @@ const config = {
   // MODE SELECTION UI & GAME START FUNCTIONS
   // -------------------------
   function createModeSelectionUI(scene) {
-    // Ask for player's name if not stored.
+    // Get player's name from localStorage; prompt if not set.
     let playerName = localStorage.getItem("playerName");
     if (!playerName) {
       playerName = prompt("Please enter your name:");
@@ -197,69 +197,69 @@ const config = {
       localStorage.setItem("playerName", playerName);
     }
     
-    // Clean up any existing UI containers.
+    // Clean up existing containers.
     if (gameOverContainer) { gameOverContainer.destroy(); gameOverContainer = null; }
     if (modeContainer) { modeContainer.destroy(); modeContainer = null; }
     
     let personalHighscoreNormal = localStorage.getItem('highscore_normal') || 0;
     let personalHighscoreAsian = localStorage.getItem('highscore_asian') || 0;
     
-    // Create mode selection container at 30% of screen height.
-    modeContainer = scene.add.container(config.width / 2, config.height * 0.3);
+    // Create container for mode selection UI, positioned at 20% of screen height.
+    modeContainer = scene.add.container(config.width / 2, config.height * 0.2);
     modeContainer.setDepth(100);
     
-    let playerNameText = scene.add.text(0, -100, `Hello, ${playerName}!`, {
+    let playerNameText = scene.add.text(0, -40, `Hello, ${playerName}!`, {
+      fontSize: '20px',
+      fill: '#fff',
+      align: 'center'
+    }).setOrigin(0.5);
+    
+    let modeTitleText = scene.add.text(0, -10, "Select Game Mode", {
       fontSize: '24px',
       fill: '#fff',
       align: 'center'
     }).setOrigin(0.5);
     
-    let modeTitleText = scene.add.text(0, -60, "Select Game Mode", {
-      fontSize: '28px',
-      fill: '#fff',
-      align: 'center'
-    }).setOrigin(0.5);
-    
-    let normalButton = scene.add.text(0, -10, "Normal Mode", {
-      fontSize: '28px',
+    let normalButton = scene.add.text(0, 20, "Normal Mode", {
+      fontSize: '24px',
       fill: '#fff',
       backgroundColor: '#000',
-      padding: { x: 10, y: 5 }
+      padding: { x: 8, y: 4 }
     }).setOrigin(0.5).setInteractive();
     
-    let asianButton = scene.add.text(0, 40, "Asian Normal Mode", {
-      fontSize: '28px',
+    let asianButton = scene.add.text(0, 50, "Asian Normal Mode", {
+      fontSize: '24px',
       fill: '#fff',
       backgroundColor: '#000',
-      padding: { x: 10, y: 5 }
+      padding: { x: 8, y: 4 }
     }).setOrigin(0.5).setInteractive();
     
     let personalHighscoreText = scene.add.text(0, 80, 
       `Your Highscore:\nNormal: ${personalHighscoreNormal}   Asian: ${personalHighscoreAsian}`, {
-      fontSize: '16px',
+      fontSize: '14px',
       fill: '#fff',
       align: 'center'
     }).setOrigin(0.5);
     
     let leaderboardNormalText = scene.add.text(-config.width / 4, 110, 
       "Normal:\n" + formatLeaderboard("normal"), {
-      fontSize: '16px',
+      fontSize: '14px',
       fill: '#fff',
       align: 'center'
     }).setOrigin(0.5, 0);
     
     let leaderboardAsianText = scene.add.text(config.width / 4, 110, 
       "Asian:\n" + formatLeaderboard("asian"), {
-      fontSize: '16px',
+      fontSize: '14px',
       fill: '#fff',
       align: 'center'
     }).setOrigin(0.5, 0);
     
-    let changeNameButton = scene.add.text(0, 160, "Change Name", {
-      fontSize: '16px',
+    let changeNameButton = scene.add.text(0, 140, "Change Name", {
+      fontSize: '14px',
       fill: '#ff0',
       backgroundColor: '#000',
-      padding: { x: 8, y: 4 }
+      padding: { x: 6, y: 3 }
     }).setOrigin(0.5).setInteractive();
     
     changeNameButton.on('pointerdown', () => {
@@ -400,7 +400,6 @@ const config = {
     gameOverContainer.getAt(2).setText('Score: ' + score);
     
     let playerName = localStorage.getItem("playerName") || "Guest";
-    
     fetch('https://dodgetheblock.netlify.app/.netlify/functions/submit-score', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },

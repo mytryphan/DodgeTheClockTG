@@ -16,17 +16,14 @@ exports.handler = async (event, context) => {
       return { statusCode: 400, body: "Missing or invalid parameters" };
     }
     const result = await client.query(
-      q.Create(
-        q.Collection("scores"),
-        { data: { mode, name, score } }
-      )
+      q.Create(q.Collection("scores"), { data: { mode, name, score } })
     );
     return {
       statusCode: 200,
       body: JSON.stringify({ success: true, result })
     };
   } catch (err) {
-    console.error("Error submitting score:", err);
+    console.error("Error in submit-score:", err);
     return { statusCode: 500, body: "Server Error" };
   }
 };
