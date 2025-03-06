@@ -25,7 +25,7 @@ const config = {
   let nextSpeedIncreaseScore;
   let nextMaxBlocksIncreaseScore;
   
-  // Base player speed (doubled; default is now 24)
+  // Base player speed is now 24 (doubled from previous value of 12)
   let playerSpeed = 24;
   
   const modeSettings = {
@@ -66,16 +66,12 @@ const config = {
   // -------------------------
   // FIREBASE LEADERBOARD & USER FUNCTIONS (Firestore)
   // -------------------------
-  
-  // Checks for uniqueness by creating a document in "users" collection.
-  // If the document exists, the name is already taken.
   async function registerUniqueName(name) {
     const docRef = db.collection("users").doc(name);
     const doc = await docRef.get();
     return !doc.exists;
   }
   
-  // Prompt for a unique name (only used if none is stored)
   async function promptForUniqueName() {
     let name = prompt("Please enter your name:");
     if (!name) name = "Guest";
@@ -87,9 +83,9 @@ const config = {
     return name;
   }
   
-  // Submit the score as a new document for every run (no composite ID).
   async function submitScoreFirestore(mode, name, score) {
     try {
+      // Every run is recorded as a new document.
       await db.collection("scores").add({
         mode: mode,
         name: name,
@@ -102,7 +98,6 @@ const config = {
     }
   }
   
-  // Retrieve the top 10 runs (ordered by score descending)
   async function getGlobalLeaderboard(mode) {
     try {
       const querySnapshot = await db.collection("scores")
@@ -137,6 +132,7 @@ const config = {
     this.load.image('background', 'assets/background.png');
     this.load.image('player', 'assets/player.png');
     this.load.image('block', 'assets/block.png');
+    this.load.image('star', 'assets/star.png'); // New star asset
     this.load.image('gameOverBg', 'assets/game_over_bg.png');
     this.load.image('restartButton', 'assets/restart_button.png');
   }
@@ -174,21 +170,34 @@ const config = {
     }
     player.x = Phaser.Math.Clamp(player.x, player.width / 2, config.width - player.width / 2);
     
-    // Blocks movement & collision
-    blocks.getChildren().forEach(function(block) {
-      block.speed = block.baseSpeed * speedMultiplier;
-      block.y += block.speed * dt;
-      if (checkCollision(player, block)) {
-        showGameOver();
+    // Process obstacles (blocks or stars)
+    blocks.getChildren().forEach(function(obstacle) {
+      obstacle.speed = obstacle.baseSpeed * speedMultiplier;
+      obstacle.y += obstacle.speed * dt;
+      
+      if (checkCollision(player, obstacle)) {
+        if (obstacle.type === "star") {
+          // Collect the star: increase score by 10 and destroy the star.
+          score += 10;
+          scoreText.setText('Score: ' + score);
+          obstacle.destroy();
+        } else {
+          // For blocks, trigger game over.
+          showGameOver();
+        }
       }
-      if (block.y > config.height) {
-        block.destroy();
-        score++;
-        scoreText.setText('Score: ' + score);
+      
+      if (obstacle.y > config.height) {
+        obstacle.destroy();
+        // For blocks only: increment score by 1 (as before).
+        if (obstacle.type === "block") {
+          score++;
+          scoreText.setText('Score: ' + score);
+        }
       }
     });
     
-    // Progression logic
+    // Progression logic (unchanged)
     let threshold = modeSettings[selectedMode].threshold;
     if (score >= nextSpeedIncreaseScore) {
       speedMultiplier *= modeSettings[selectedMode].speedIncreaseFactor;
@@ -212,6 +221,53 @@ const config = {
         nextMaxBlocksIncreaseScore += threshold;
       }
     }
+  }
+  
+  // -------------------------
+  // SPAWN FUNCTION: Spawns an obstacle which is either a block or (10% chance) a star
+  // -------------------------
+  function spawnBlock() {
+    if (gameOver) return;
+    if (blocks.getLength() < maxBlocks) {
+      // 10% chance to spawn a star instead of a block.
+      let isStar = Math.random() < 0.10;
+      let obstacle;
+      if (isStar) {
+        obstacle = this.add.image(
+          Phaser.Math.Between(40, config.width - 40),
+          0,
+          'star'
+        ).setOrigin(0.5).setDisplaySize(40, 40);
+        obstacle.type = "star";
+      } else {
+        obstacle = this.add.image(
+          Phaser.Math.Between(40, config.width - 40),
+          0,
+          'block'
+        ).setOrigin(0.5).setDisplaySize(40, 40);
+        obstacle.type = "block";
+      }
+      // Set baseSpeed from the mode settings
+      if (selectedMode === "normal") {
+        obstacle.baseSpeed = Phaser.Math.Between(
+          modeSettings.normal.blockSpeedMin,
+          modeSettings.normal.blockSpeedMax
+        );
+      } else if (selectedMode === "asian") {
+        obstacle.baseSpeed = Phaser.Math.Between(
+          modeSettings.asian.blockSpeedMin,
+          modeSettings.asian.blockSpeedMax
+        );
+      }
+      obstacle.speed = obstacle.baseSpeed * speedMultiplier;
+      blocks.add(obstacle);
+    }
+  }
+  
+  function checkCollision(spriteA, spriteB) {
+    const boundsA = spriteA.getBounds();
+    const boundsB = spriteB.getBounds();
+    return Phaser.Geom.Intersects.RectangleToRectangle(boundsA, boundsB);
   }
   
   // -------------------------
@@ -287,7 +343,7 @@ const config = {
       align: 'center'
     }).setOrigin(0.5, 0);
     
-    // Place the Change Name button at the very bottom of the screen (outside the mode container)
+    // Place the Change Name button at the very bottom of the screen (outside the container)
     if (changeNameButton) { changeNameButton.destroy(); }
     changeNameButton = scene.add.text(config.width / 2, config.height - 30, "Change Name", {
       fontSize: '14px',
@@ -377,18 +433,37 @@ const config = {
   function spawnBlock() {
     if (gameOver) return;
     if (blocks.getLength() < maxBlocks) {
-      let newBlock = this.add.image(
-        Phaser.Math.Between(40, config.width - 40),
-        0,
-        'block'
-      ).setOrigin(0.5).setDisplaySize(40, 40);
-      if (selectedMode === "normal") {
-        newBlock.baseSpeed = Phaser.Math.Between(modeSettings.normal.blockSpeedMin, modeSettings.normal.blockSpeedMax);
-      } else if (selectedMode === "asian") {
-        newBlock.baseSpeed = Phaser.Math.Between(modeSettings.asian.blockSpeedMin, modeSettings.asian.blockSpeedMax);
+      // 10% chance for a star instead of a block.
+      let isStar = Math.random() < 0.10;
+      let obstacle;
+      if (isStar) {
+        obstacle = this.add.image(
+          Phaser.Math.Between(40, config.width - 40),
+          0,
+          'star'
+        ).setOrigin(0.5).setDisplaySize(40, 40);
+        obstacle.type = "star";
+      } else {
+        obstacle = this.add.image(
+          Phaser.Math.Between(40, config.width - 40),
+          0,
+          'block'
+        ).setOrigin(0.5).setDisplaySize(40, 40);
+        obstacle.type = "block";
       }
-      newBlock.speed = newBlock.baseSpeed * speedMultiplier;
-      blocks.add(newBlock);
+      if (selectedMode === "normal") {
+        obstacle.baseSpeed = Phaser.Math.Between(
+          modeSettings.normal.blockSpeedMin,
+          modeSettings.normal.blockSpeedMax
+        );
+      } else if (selectedMode === "asian") {
+        obstacle.baseSpeed = Phaser.Math.Between(
+          modeSettings.asian.blockSpeedMin,
+          modeSettings.asian.blockSpeedMax
+        );
+      }
+      obstacle.speed = obstacle.baseSpeed * speedMultiplier;
+      blocks.add(obstacle);
     }
   }
   
