@@ -3,7 +3,7 @@ const config = {
     type: Phaser.AUTO,
     width: window.innerWidth,
     height: window.innerHeight,
-    parent: 'game-container', // (optional) HTML element id where game is rendered
+    parent: 'game-container', // optional: the HTML element id where the game will render
     scale: {
         mode: Phaser.Scale.FIT,
         autoCenter: Phaser.Scale.CENTER_BOTH,
@@ -18,10 +18,12 @@ const config = {
 let game = new Phaser.Game(config);
 
 // Global variables
-let player, block, cursors, score = 0, scoreText, gameOver = false;
+let player, cursors, score = 0, scoreText, gameOver = false;
 let background, gameOverContainer;
-let targetX = null;      // Mobile target x-position
-const maxSpeed = 6;      // Maximum movement speed per frame
+let targetX = null; // Mobile target x-position
+const maxSpeed = 6; // Maximum player movement speed per frame
+let blocks;         // Group for falling blocks
+let maxBlocks = Phaser.Math.Between(1, 5); // Maximum number of blocks on screen at once
 
 // Preload assets
 function preload() {
@@ -39,13 +41,8 @@ function create() {
         .setOrigin(0)
         .setDisplaySize(config.width, config.height);
 
-    // Create the player, centered horizontally near the bottom
+    // Create the player (centered horizontally near the bottom)
     player = this.add.image(config.width / 2, config.height - 80, 'player')
-        .setOrigin(0.5)
-        .setDisplaySize(40, 40);
-
-    // Create the falling block
-    block = this.add.image(Phaser.Math.Between(40, config.width - 40), 0, 'block')
         .setOrigin(0.5)
         .setDisplaySize(40, 40);
 
@@ -58,10 +55,28 @@ function create() {
     // Enable keyboard input
     cursors = this.input.keyboard.createCursorKeys();
 
-    // Set up mobile touch events to record a target X-position
+    // Set up mobile touch controls
     this.input.on('pointerdown', (pointer) => { targetX = pointer.x; });
     this.input.on('pointermove', (pointer) => { targetX = pointer.x; });
     this.input.on('pointerup', () => { targetX = null; });
+
+    // Create a group for blocks
+    blocks = this.add.group();
+
+    // Timed event to spawn new blocks every 500ms if under the current max
+    this.time.addEvent({
+        delay: 500,
+        callback: spawnBlock,
+        callbackScope: this,
+        loop: true
+    });
+
+    // Timed event to recalculate the maximum number of blocks (random 1 to 5) every 5 seconds
+    this.time.addEvent({
+        delay: 5000,
+        callback: () => { maxBlocks = Phaser.Math.Between(1, 5); },
+        loop: true
+    });
 }
 
 // Update game logic
@@ -76,7 +91,6 @@ function update() {
     }
 
     // --- Mobile Movement ---
-    // If a target position is set (from touch), move gradually toward it
     if (targetX !== null) {
         let delta = targetX - player.x;
         if (Math.abs(delta) > maxSpeed) {
@@ -86,27 +100,44 @@ function update() {
         }
     }
 
-    // Keep the player within the screen bounds
+    // Keep the player within screen bounds
     player.x = Phaser.Math.Clamp(player.x, player.width / 2, config.width - player.width / 2);
 
-    // Move the block downward at a fixed speed
-    block.y += 2;
+    // For each falling block in the group
+    blocks.getChildren().forEach(function(block) {
+        // Move the block downward by its own speed
+        block.y += block.speed;
 
-    // If the block goes off-screen, reset its position and update the score
-    if (block.y > config.height) {
-        block.y = 0;
-        block.x = Phaser.Math.Between(40, config.width - 40);
-        score++;
-        scoreText.setText('Score: ' + score);
-    }
+        // Check for collision with the player (using bounding box collision)
+        if (checkPixelCollision(player, block)) {
+            showGameOver();
+        }
 
-    // Check for collision between player and block (using bounding box for now)
-    if (checkPixelCollision(player, block)) {
-        showGameOver();
+        // If the block goes off-screen, remove it and update score
+        if (block.y > config.height) {
+            block.destroy();
+            score++;
+            scoreText.setText('Score: ' + score);
+        }
+    });
+}
+
+// Spawn a new block if current count is below maxBlocks
+function spawnBlock() {
+    if (gameOver) return;
+    if (blocks.getLength() < maxBlocks) {
+        let newBlock = this.add.image(
+            Phaser.Math.Between(40, config.width - 40),
+            0,
+            'block'
+        ).setOrigin(0.5).setDisplaySize(40, 40);
+        // Assign a random falling speed between 3 and 10
+        newBlock.speed = Phaser.Math.Between(3, 10);
+        blocks.add(newBlock);
     }
 }
 
-// For this example, we use bounding box collision (you can replace this with a more detailed pixel check if needed)
+// Simple collision check using bounding boxes (placeholder for pixel-perfect collision)
 function checkPixelCollision(spriteA, spriteB) {
     const boundsA = spriteA.getBounds();
     const boundsB = spriteB.getBounds();
@@ -140,15 +171,14 @@ function createGameOverUI(scene) {
         .setInteractive();
     restartButton.on('pointerdown', () => { restartGame(scene); });
 
-    // Add all UI elements to the container
     gameOverContainer.add([gameOverBg, gameOverText, finalScoreText, restartButton]);
 }
 
-// Display the Game Over UI and update final score text
+// Display the Game Over UI and update the final score text
 function showGameOver() {
     gameOver = true;
     gameOverContainer.setVisible(true);
-    // gameOverContainer.getAt(2) is the finalScoreText in our container
+    // Update final score (index 2 in container is the final score text)
     gameOverContainer.getAt(2).setText('Score: ' + score);
 }
 
@@ -159,7 +189,9 @@ function restartGame(scene) {
     scoreText.setText('Score: 0');
     player.x = config.width / 2;
     player.y = config.height - 80;
-    block.x = Phaser.Math.Between(40, config.width - 40);
-    block.y = 0;
+    // Remove all existing blocks
+    blocks.clear(true, true);
+    // Optionally, recalculate maxBlocks immediately
+    maxBlocks = Phaser.Math.Between(1, 5);
     gameOverContainer.setVisible(false);
 }
