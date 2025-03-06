@@ -1,7 +1,6 @@
-const faunadb = require('faunadb');
-const q = faunadb.query;
+const { Client, query: q } = require('faunadb');
 
-const client = new faunadb.Client({
+const client = new Client({
   secret: process.env.FAUNADB_SECRET
 });
 
@@ -11,7 +10,7 @@ exports.handler = async (event, context) => {
   }
   try {
     const data = JSON.parse(event.body);
-    console.log("Received data:", data);  // Debug log
+    console.log("Received data:", data);
     const { mode, name, score } = data;
     if (!mode || !name || typeof score !== "number") {
       console.error("Invalid parameters", data);
