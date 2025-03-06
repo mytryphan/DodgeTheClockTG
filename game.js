@@ -25,7 +25,8 @@ const config = {
   let nextSpeedIncreaseScore;
   let nextMaxBlocksIncreaseScore;
   
-  let playerSpeed = 6;
+  // Player speed is doubled (default was 6, now 12)
+  let playerSpeed = 12;
   
   const modeSettings = {
     normal: {
@@ -68,15 +69,8 @@ const config = {
   async function registerUniqueName(name) {
     const docRef = db.collection("users").doc(name);
     const doc = await docRef.get();
-    if (doc.exists) {
-      return false;
-    } else {
-      // Create the document so that the name is reserved.
-      await docRef.set({ registeredAt: firebase.firestore.FieldValue.serverTimestamp() });
-      return true;
-    }
+    return !doc.exists;
   }
-  
   
   async function promptForUniqueName() {
     let name = prompt("Please enter your name:");
@@ -241,14 +235,14 @@ const config = {
     }
     const currentPlayerName = storedName;
     
-    // Destroy any previous UI elements
+    // Destroy any previous UI elements.
     if (gameOverContainer) { gameOverContainer.destroy(); gameOverContainer = null; }
     if (modeContainer) { modeContainer.destroy(); modeContainer = null; }
     
     let personalHighscoreNormal = localStorage.getItem('highscore_normal') || 0;
     let personalHighscoreAsian = localStorage.getItem('highscore_asian') || 0;
     
-    // Position container at 40% of screen height
+    // Position container at 40% of screen height.
     modeContainer = scene.add.container(config.width / 2, config.height * 0.4);
     modeContainer.setDepth(100);
     
@@ -302,7 +296,7 @@ const config = {
       align: 'center'
     }).setOrigin(0.5, 0);
     
-    // Create "Change Name" button outside the container at the bottom.
+    // Place the Change Name button at the very bottom of the screen
     if (changeNameButton) { changeNameButton.destroy(); }
     changeNameButton = scene.add.text(config.width / 2, config.height - 30, "Change Name", {
       fontSize: '14px',
@@ -350,14 +344,13 @@ const config = {
   function setMode(mode) {
     selectedMode = mode;
     speedMultiplier = 1;
-    playerSpeed = 6;
+    playerSpeed = 12; // Set player speed to the default (already doubled)
     nextSpeedIncreaseScore = modeSettings[mode].threshold;
     nextMaxBlocksIncreaseScore = (mode === "normal") ? modeSettings[mode].threshold * 2 : modeSettings[mode].threshold;
   }
   
   function startGame(scene) {
     gameStarted = true;
-    // Destroy the mode container and the change name button so they are not visible during gameplay.
     if (modeContainer) { modeContainer.destroy(); modeContainer = null; }
     if (changeNameButton) { changeNameButton.destroy(); changeNameButton = null; }
     
@@ -474,7 +467,7 @@ const config = {
     gameStarted = false;
     score = 0;
     speedMultiplier = 1;
-    playerSpeed = 6;
+    playerSpeed = 12; // Reset player speed to the default (doubled value)
     gameOverShown = false;
     
     if (player) { player.destroy(); player = null; }
