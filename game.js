@@ -19,7 +19,7 @@ const config = {
   
   let game = new Phaser.Game(config);
   
-  // Global variables for mode progression and selection
+  // Global variables for progression and mode selection
   let selectedMode; // "normal" or "asian"
   let speedMultiplier = 1;
   let nextSpeedIncreaseScore;
@@ -62,6 +62,8 @@ const config = {
   // -------------------------
   // FIREBASE LEADERBOARD & USER FUNCTIONS (Firestore)
   // -------------------------
+  
+  // Register a unique name using the "users" collection.
   async function registerUniqueName(name) {
     const docRef = db.collection("users").doc(name);
     const doc = await docRef.get();
@@ -73,6 +75,7 @@ const config = {
     }
   }
   
+  // Prompt the user for a unique name.
   async function promptForUniqueName() {
     let name = prompt("Please enter your name:");
     if (!name) name = "Guest";
@@ -84,12 +87,14 @@ const config = {
     return name;
   }
   
+  // Submit the score to Firestore using a composite document ID (mode_name) to enforce one entry per name.
   async function submitScoreFirestore(mode, name, score) {
     const docId = `${mode}_${name}`;
     const docRef = db.collection("scores").doc(docId);
     try {
       const doc = await docRef.get();
       if (doc.exists) {
+        // Update the score only if the new score is higher.
         if (score > doc.data().score) {
           await docRef.update({
             score: score,
@@ -100,6 +105,7 @@ const config = {
           console.log("Existing score is higher; not updating for", name);
         }
       } else {
+        // Create a new document.
         await docRef.set({
           mode: mode,
           name: name,
@@ -113,6 +119,7 @@ const config = {
     }
   }
   
+  // Retrieve the top 10 scores for a given mode.
   async function getGlobalLeaderboard(mode) {
     try {
       const querySnapshot = await db.collection("scores")
@@ -168,7 +175,7 @@ const config = {
     if (!gameStarted || gameOver) return;
     let dt = delta / 16.67;
     
-    // Player Movement
+    // Player movement
     if (cursors.left.isDown) {
       player.x -= playerSpeed * dt;
     } else if (cursors.right.isDown) {
@@ -184,7 +191,7 @@ const config = {
     }
     player.x = Phaser.Math.Clamp(player.x, player.width / 2, config.width - player.width / 2);
     
-    // Blocks Movement & Collision
+    // Blocks movement and collision
     blocks.getChildren().forEach(function(block) {
       block.speed = block.baseSpeed * speedMultiplier;
       block.y += block.speed * dt;
@@ -198,7 +205,7 @@ const config = {
       }
     });
     
-    // Progression
+    // Progression logic
     let threshold = modeSettings[selectedMode].threshold;
     if (score >= nextSpeedIncreaseScore) {
       speedMultiplier *= modeSettings[selectedMode].speedIncreaseFactor;
@@ -318,6 +325,7 @@ const config = {
       modeContainer.destroy();
       startGame(scene);
     });
+    
     asianButton.on('pointerdown', function() {
       setMode("asian");
       modeContainer.destroy();
@@ -334,28 +342,6 @@ const config = {
       leaderboardAsianText,
       changeNameButton
     ]);
-  }
-  
-  async function registerUniqueName(name) {
-    const docRef = db.collection("users").doc(name);
-    const doc = await docRef.get();
-    if (doc.exists) {
-      return false;
-    } else {
-      await docRef.set({ registeredAt: firebase.firestore.FieldValue.serverTimestamp() });
-      return true;
-    }
-  }
-  
-  async function promptForUniqueName() {
-    let name = prompt("Please enter your name:");
-    if (!name) name = "Guest";
-    const unique = await registerUniqueName(name);
-    if (!unique) {
-      alert("This name is already in use. Please choose a different name.");
-      return await promptForUniqueName();
-    }
-    return name;
   }
   
   function setMode(mode) {
@@ -399,9 +385,6 @@ const config = {
     createGameOverUI(scene);
   }
   
-  // -------------------------
-  // BLOCK SPAWNING & COLLISION
-  // -------------------------
   function spawnBlock() {
     if (gameOver) return;
     if (blocks.getLength() < maxBlocks) {
@@ -426,9 +409,6 @@ const config = {
     return Phaser.Geom.Intersects.RectangleToRectangle(boundsA, boundsB);
   }
   
-  // -------------------------
-  // GAME OVER & RESTART UI
-  // -------------------------
   function createGameOverUI(scene) {
     if (gameOverContainer) return;
     gameOverContainer = scene.add.container(config.width / 2, config.height / 2);
