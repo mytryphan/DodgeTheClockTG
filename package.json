@@ -1,0 +1,21 @@
+{
+    "name": "dodgetheblock",
+    "version": "1.0.0",
+    "description": "A game built for Telegram",
+    "main": "game.js",
+    "scripts": {
+      "start": "parcel index.html",
+      "build": "parcel build index.html --public-url ./"
+    },
+    "dependencies": {
+      "phaser": "^3.55.2",
+      "faunadb": "^4.0.0"
+    },
+    "devDependencies": {
+      "parcel": "^2.0.0"
+    },
+    "keywords": [],
+    "author": "",
+    "license": "ISC"
+  }
+  
