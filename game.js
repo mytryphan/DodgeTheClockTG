@@ -68,8 +68,15 @@ const config = {
   async function registerUniqueName(name) {
     const docRef = db.collection("users").doc(name);
     const doc = await docRef.get();
-    return !doc.exists;
+    if (doc.exists) {
+      return false;
+    } else {
+      // Create the document so that the name is reserved.
+      await docRef.set({ registeredAt: firebase.firestore.FieldValue.serverTimestamp() });
+      return true;
+    }
   }
+  
   
   async function promptForUniqueName() {
     let name = prompt("Please enter your name:");
