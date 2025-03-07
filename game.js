@@ -63,6 +63,9 @@ const config = {
   // Global variable for the "Change Name" button
   let changeNameButton;
   
+  // NEW: Player skin selection variable (stored as "playerSkin", values "1", "2", or "3")
+  let playerSkin = localStorage.getItem("playerSkin") || "1";
+  
   // -------------------------
   // FIREBASE LEADERBOARD & USER FUNCTIONS (Firestore)
   // -------------------------
@@ -130,11 +133,21 @@ const config = {
   // -------------------------
   function preload() {
     this.load.image('background', 'assets/background.png');
-    this.load.image('player', 'assets/player.png');
+    // Load player skins:
+    this.load.image('player1', 'assets/player1.png');
+    this.load.image('player2', 'assets/player2.png');
+    this.load.image('player3', 'assets/player3.png');
+    
+    // Load obstacles:
     this.load.image('block', 'assets/block.png');
     this.load.image('star', 'assets/star.png');
+    // Alternative obstacles for skin 3:
+    this.load.image('block3', 'assets/block3.png');
+    this.load.image('star3', 'assets/star3.png');
+    
     this.load.image('gameOverBg', 'assets/game_over_bg.png');
     this.load.image('restartButton', 'assets/restart_button.png');
+    // Shooting code is not needed now.
   }
   
   // -------------------------
@@ -225,10 +238,10 @@ const config = {
   }
   
   // -------------------------
-  // MODE SELECTION UI & GAME START FUNCTIONS
+  // MODE SELECTION UI & SKIN SELECTION
   // -------------------------
   async function createModeSelectionUI(scene) {
-    // Check for stored name; if exists, use it; if not, prompt once.
+    // Get stored name; if not, prompt once.
     let storedName = localStorage.getItem("playerName");
     if (!storedName) {
       storedName = await promptForUniqueName();
@@ -236,45 +249,115 @@ const config = {
     }
     const currentPlayerName = storedName;
     
+    // Get the stored skin selection; default to "1"
+    playerSkin = localStorage.getItem("playerSkin") || "1";
+    
     // Clear previous UI elements.
     if (gameOverContainer) { gameOverContainer.destroy(); gameOverContainer = null; }
     if (modeContainer) { modeContainer.destroy(); modeContainer = null; }
     
-    let personalHighscoreNormal = localStorage.getItem('highscore_normal') || 0;
-    let personalHighscoreAsian = localStorage.getItem('highscore_asian') || 0;
+    let personalHighscoreNormal = parseInt(localStorage.getItem('highscore_normal')) || 0;
+    let personalHighscoreAsian = parseInt(localStorage.getItem('highscore_asian')) || 0;
     
-    // Position container at 40% of screen height.
     modeContainer = scene.add.container(config.width / 2, config.height * 0.4);
     modeContainer.setDepth(100);
     
-    let playerNameText = scene.add.text(0, -80, `Hello, ${currentPlayerName}!`, {
+    let playerNameText = scene.add.text(0, -120, `Hello, ${currentPlayerName}!`, {
       fontSize: '20px',
       fill: '#fff',
       align: 'center'
     }).setOrigin(0.5);
     
-    let modeTitleText = scene.add.text(0, -40, "Select Game Mode", {
+   // --- Skin Selection UI ---
+   let skinTitleText = scene.add.text(0, -90, "Select Player Skin", {
+    fontSize: '18px',
+    fill: '#fff',
+    align: 'center'
+  }).setOrigin(0.5);
+
+  // Create a container for skins.
+  let skinContainer = scene.add.container(0, -50);
+
+  // Define base and selected scales.
+  let baseScale = 0.35;     // 30% smaller than the previous default (0.5)
+  let selectedScale = 0.5;  // Selected skin is larger
+
+  // Create skin images with increased spacing.
+  let skin1 = scene.add.image(-80, 0, 'player1').setScale(baseScale).setInteractive();
+  let skin2 = scene.add.image(0, 0, 'player2').setScale(baseScale).setInteractive();
+  let skin3 = scene.add.image(80, 0, 'player3').setScale(baseScale).setInteractive();
+
+  // Lock skins if conditions are not met.
+  let maxScore = Math.max(personalHighscoreNormal, personalHighscoreAsian);
+  if (maxScore < 100) {
+    skin2.setTint(0x555555);
+  }
+  if (personalHighscoreAsian < 120) {
+    skin3.setTint(0x555555);
+  }
+
+  // Function to update skin highlight: selected skin scales up.
+  function updateSkinHighlight(selected) {
+    skin1.setScale(selected === "1" ? selectedScale : baseScale);
+    skin2.setScale(selected === "2" ? selectedScale : baseScale);
+    skin3.setScale(selected === "3" ? selectedScale : baseScale);
+  }
+
+  // Initialize highlight based on stored skin.
+  updateSkinHighlight(playerSkin);
+
+  // On click, if unlocked, update selection.
+  skin1.on('pointerdown', () => {
+    localStorage.setItem("playerSkin", "1");
+    updateSkinHighlight("1");
+    playerNameText.setText(`Hello, ${currentPlayerName}! (Skin 1)`);
+  });
+  skin2.on('pointerdown', () => {
+    if (maxScore >= 100) {
+      localStorage.setItem("playerSkin", "2");
+      updateSkinHighlight("2");
+      playerNameText.setText(`Hello, ${currentPlayerName}! (Skin 2)`);
+    } else {
+      alert("Unlock Skin 2 by reaching a score of 100 in any mode!");
+    }
+  });
+  skin3.on('pointerdown', () => {
+    if (personalHighscoreAsian >= 120) {
+      localStorage.setItem("playerSkin", "3");
+      updateSkinHighlight("3");
+      playerNameText.setText(`Hello, ${currentPlayerName}! (Skin 3)`);
+    } else {
+      alert("Unlock Skin 3 by reaching a score of 120 in Asian mode!");
+    }
+  });
+
+  skinContainer.add([skin1, skin2, skin3]);
+  // --- End Skin Selection UI ---
+
+
+    
+    let modeTitle = scene.add.text(0, 20, "Select Game Mode", {
       fontSize: '24px',
       fill: '#fff',
       align: 'center'
     }).setOrigin(0.5);
     
-    // Set mode buttons' background to red.
-    let normalButton = scene.add.text(0, 0, "Normal Mode", {
+    // Mode buttons with red background.
+    let normalButton = scene.add.text(0, 60, "Normal Mode", {
       fontSize: '24px',
       fill: '#fff',
       backgroundColor: 'red',
       padding: { x: 8, y: 4 }
     }).setOrigin(0.5).setInteractive();
     
-    let asianButton = scene.add.text(0, 40, "Asian Normal Mode", {
+    let asianButton = scene.add.text(0, 100, "Asian Normal Mode", {
       fontSize: '24px',
       fill: '#fff',
       backgroundColor: 'red',
       padding: { x: 8, y: 4 }
     }).setOrigin(0.5).setInteractive();
     
-    let personalHighscoreText = scene.add.text(0, 80, 
+    let personalHighscoreText = scene.add.text(0, 140, 
       `Your Highscore:\nNormal: ${personalHighscoreNormal}   Asian: ${personalHighscoreAsian}`, {
       fontSize: '14px',
       fill: '#fff',
@@ -284,14 +367,14 @@ const config = {
     let leaderboardNormal = await getGlobalLeaderboard("normal");
     let leaderboardAsian = await getGlobalLeaderboard("asian");
     
-    let leaderboardNormalText = scene.add.text(-config.width / 4, 100, 
+    let leaderboardNormalText = scene.add.text(-config.width / 4, 160, 
       "Normal:\n" + formatLeaderboardFromData(leaderboardNormal), {
       fontSize: '14px',
       fill: '#fff',
       align: 'center'
     }).setOrigin(0.5, 0);
     
-    let leaderboardAsianText = scene.add.text(config.width / 4, 100, 
+    let leaderboardAsianText = scene.add.text(config.width / 4, 160, 
       "Asian:\n" + formatLeaderboardFromData(leaderboardAsian), {
       fontSize: '14px',
       fill: '#fff',
@@ -334,7 +417,9 @@ const config = {
     
     modeContainer.add([
       playerNameText,
-      modeTitleText,
+      skinTitleText,
+      skinContainer,
+      modeTitle,
       normalButton,
       asianButton,
       personalHighscoreText,
@@ -356,7 +441,15 @@ const config = {
     if (modeContainer) { modeContainer.destroy(); modeContainer = null; }
     if (changeNameButton) { changeNameButton.destroy(); changeNameButton = null; }
     
-    player = scene.add.image(config.width / 2, config.height - 80, 'player')
+    // Choose player texture based on selected skin.
+    let playerTexture = 'player1';
+    if (localStorage.getItem("playerSkin") === "2") {
+      playerTexture = 'player2';
+    } else if (localStorage.getItem("playerSkin") === "3") {
+      playerTexture = 'player3';
+    }
+    
+    player = scene.add.image(config.width / 2, config.height - 80, playerTexture)
       .setOrigin(0.5)
       .setDisplaySize(40, 40);
     score = 0;
@@ -392,20 +485,39 @@ const config = {
       let spawnY = 0;
       let isStar = Math.random() < 0.10;
       let obstacle;
-      if (isStar) {
-        obstacle = this.add.image(
-          Phaser.Math.Between(40, config.width - 40),
-          spawnY,
-          'star'
-        ).setOrigin(0.5).setDisplaySize(40, 40);
-        obstacle.type = "star";
+      // If skin 3 is selected, use alternate assets.
+      if (localStorage.getItem("playerSkin") === "3") {
+        if (isStar) {
+          obstacle = this.add.image(
+            Phaser.Math.Between(40, config.width - 40),
+            spawnY,
+            'star3'
+          ).setOrigin(0.5).setDisplaySize(40, 40);
+          obstacle.type = "star";
+        } else {
+          obstacle = this.add.image(
+            Phaser.Math.Between(40, config.width - 40),
+            spawnY,
+            'block3'
+          ).setOrigin(0.5).setDisplaySize(40, 40);
+          obstacle.type = "block";
+        }
       } else {
-        obstacle = this.add.image(
-          Phaser.Math.Between(40, config.width - 40),
-          spawnY,
-          'block'
-        ).setOrigin(0.5).setDisplaySize(40, 40);
-        obstacle.type = "block";
+        if (isStar) {
+          obstacle = this.add.image(
+            Phaser.Math.Between(40, config.width - 40),
+            spawnY,
+            'star'
+          ).setOrigin(0.5).setDisplaySize(40, 40);
+          obstacle.type = "star";
+        } else {
+          obstacle = this.add.image(
+            Phaser.Math.Between(40, config.width - 40),
+            spawnY,
+            'block'
+          ).setOrigin(0.5).setDisplaySize(40, 40);
+          obstacle.type = "block";
+        }
       }
       if (selectedMode === "normal") {
         obstacle.baseSpeed = Phaser.Math.Between(
@@ -465,12 +577,12 @@ const config = {
     submitScoreFirestore(selectedMode, currentName, score);
     
     if (selectedMode === "normal") {
-      let hs = localStorage.getItem('highscore_normal') || 0;
+      let hs = parseInt(localStorage.getItem('highscore_normal')) || 0;
       if (score > hs) {
         localStorage.setItem('highscore_normal', score);
       }
     } else if (selectedMode === "asian") {
-      let hs = localStorage.getItem('highscore_asian') || 0;
+      let hs = parseInt(localStorage.getItem('highscore_asian')) || 0;
       if (score > hs) {
         localStorage.setItem('highscore_asian', score);
       }
