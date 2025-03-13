@@ -701,7 +701,7 @@ function showGameOver() {
   let currentName = localStorage.getItem("playerName") || "Guest";
   submitScoreFirestore(selectedMode, currentName, score);
   
-  if (selectedMode === "normal" || selectedMode === "shooting") {
+  if (selectedMode === "normal") {
     let hs = parseInt(localStorage.getItem('highscore_normal')) || 0;
     if (score > hs) {
       localStorage.setItem('highscore_normal', score);
@@ -718,9 +718,10 @@ function showGameOver() {
     }
   }
   
-  // Update the global leaderboards immediately.
+  // Optionally update the leaderboards immediately:
   updateLeaderboards(game.scene.scenes[0]);
 }
+
 
 function restartGame(scene) {
   if (spawnTimer) {
