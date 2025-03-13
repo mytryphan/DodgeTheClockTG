@@ -49,7 +49,7 @@ const modeSettings = {
     maxBlockIncrease: 2,
     threshold: 10
   },
-  shooting: {
+  shooting: { 
     initialMinBlocks: 1,
     initialMaxBlocks: 5,
     blockSpeedMin: 5,
@@ -73,7 +73,7 @@ let gameOverShown = false;
 // Global variable for the "Change Name" button
 let changeNameButton;
 
-// NEW: Player skin selection variable (values "1", "2", or "3")
+// NEW: Global variable for player skin selection (values "1", "2", or "3")
 let playerSkin = localStorage.getItem("playerSkin") || "1";
 
 // Arrays for obstacle images.
@@ -83,6 +83,9 @@ const altBlockImages = ['blockAlt1', 'blockAlt2', 'blockAlt3', 'blockAlt4', 'blo
 // For Shooting Mode: bullet group and timer.
 let bullets;
 let bulletTimer = null;
+
+// Global leaderboard text objects (will be set in UI function)
+let leaderboardNormalText, leaderboardAsianText, leaderboardShootingText;
 
 // -------------------------
 // FIREBASE LEADERBOARD & USER FUNCTIONS (Firestore)
@@ -145,6 +148,19 @@ function formatLeaderboardFromData(data) {
   return text;
 }
 
+// New: Update leaderboard text objects
+async function updateLeaderboards(scene) {
+  let leaderboardNormal = await getGlobalLeaderboard("normal");
+  let leaderboardAsian = await getGlobalLeaderboard("asian");
+  let leaderboardShooting = await getGlobalLeaderboard("shooting");
+  if (leaderboardNormalText)
+    leaderboardNormalText.setText("Normal:\n" + formatLeaderboardFromData(leaderboardNormal));
+  if (leaderboardAsianText)
+    leaderboardAsianText.setText("Asian:\n" + formatLeaderboardFromData(leaderboardAsian));
+  if (leaderboardShootingText)
+    leaderboardShootingText.setText("Shooting:\n" + formatLeaderboardFromData(leaderboardShooting));
+}
+
 // -------------------------
 // PRELOAD FUNCTION
 // -------------------------
@@ -188,10 +204,8 @@ function create() {
     .setOrigin(0)
     .setDisplaySize(config.width, config.height);
   
-  // Create group for obstacles.
   blocks = this.add.group();
   
-  // Create explosion animation.
   this.anims.create({
     key: 'explode',
     frames: this.anims.generateFrameNumbers('explosion', { start: 0, end: 15 }),
@@ -201,11 +215,9 @@ function create() {
   
   createModeSelectionUI(this);
   
-  // Immediately force the game to use correct dimensions.
+  // Force immediate correct positioning.
   this.scale.resize(window.innerWidth, window.innerHeight);
   this.cameras.main.centerOn(window.innerWidth / 2, window.innerHeight / 2);
-  
-  // Fade in the camera.
   this.cameras.main.fadeIn(500, 0, 0, 0);
 }
 
@@ -232,12 +244,10 @@ function update(time, delta) {
   }
   player.x = Phaser.Math.Clamp(player.x, player.width / 2, config.width - player.width / 2);
   
-  // Update bullets in Shooting Mode.
   if (selectedMode === "shooting") {
     updateBullets(dt);
   }
   
-  // Update obstacles.
   blocks.getChildren().forEach(function(obstacle) {
     obstacle.speed = obstacle.baseSpeed * speedMultiplier;
     obstacle.y += obstacle.speed * dt;
@@ -252,7 +262,6 @@ function update(time, delta) {
       }
     }
     
-    // In Shooting Mode, only blocks cause game over if they reach the bottom.
     if (obstacle.y > config.height) {
       obstacle.destroy();
       if (selectedMode === "shooting" && (obstacle.type === "block")) {
@@ -264,7 +273,6 @@ function update(time, delta) {
     }
   });
   
-  // Progression logic.
   let threshold = modeSettings[selectedMode].threshold;
   if (score >= nextSpeedIncreaseScore) {
     speedMultiplier *= modeSettings[selectedMode].speedIncreaseFactor;
@@ -291,7 +299,7 @@ function update(time, delta) {
 }
 
 // -------------------------
-// BULLET FUNCTIONS (for Shooting Mode)
+// BULLET FUNCTIONS (Shooting Mode)
 // -------------------------
 function shootBullet() {
   let bulletTexture = (localStorage.getItem("playerSkin") === "3") ? 'bulletAlt' : 'bullet';
@@ -309,7 +317,6 @@ function updateBullets(dt) {
     } else {
       blocks.getChildren().forEach(function(obstacle) {
         if (obstacle.type === "block" && checkCollision(bullet.getBounds(), obstacle.getBounds())) {
-          // Create explosion animation.
           let explosion = bullet.scene.add.sprite(obstacle.x, obstacle.y, 'explosion');
           explosion.play('explode');
           obstacle.destroy();
@@ -342,7 +349,6 @@ async function createModeSelectionUI(scene) {
   let personalHighscoreAsian = parseInt(localStorage.getItem('highscore_asian')) || 0;
   let personalHighscoreShooting = parseInt(localStorage.getItem('highscore_shooting')) || 0;
   
-  // Position container centered.
   modeContainer = scene.add.container(config.width / 2, config.height * 0.4);
   modeContainer.setDepth(100);
   
@@ -446,26 +452,22 @@ Normal: ${personalHighscoreNormal}   Asian: ${personalHighscoreAsian}   Shooting
       align: 'center'
     }).setOrigin(0.5);
   
-  let leaderboardNormal = await getGlobalLeaderboard("normal");
-  let leaderboardAsian = await getGlobalLeaderboard("asian");
-  let leaderboardShooting = await getGlobalLeaderboard("shooting");
-  
-  let leaderboardNormalText = scene.add.text(-config.width / 3, 160, 
-    "Normal:\n" + formatLeaderboardFromData(leaderboardNormal), {
+  leaderboardNormalText = scene.add.text(-config.width / 3, 160, 
+    "Normal:\n" + formatLeaderboardFromData(await getGlobalLeaderboard("normal")), {
       fontSize: '10px',
       fill: '#fff',
       align: 'center'
     }).setOrigin(0.5, 0);
   
-  let leaderboardAsianText = scene.add.text(0, 160, 
-    "Asian:\n" + formatLeaderboardFromData(leaderboardAsian), {
+  leaderboardAsianText = scene.add.text(0, 160, 
+    "Asian:\n" + formatLeaderboardFromData(await getGlobalLeaderboard("asian")), {
       fontSize: '10px',
       fill: '#fff',
       align: 'center'
     }).setOrigin(0.5, 0);
   
-  let leaderboardShootingText = scene.add.text(config.width / 3, 160, 
-    "Shooting:\n" + formatLeaderboardFromData(leaderboardShooting), {
+  leaderboardShootingText = scene.add.text(config.width / 3, 160, 
+    "Shooting:\n" + formatLeaderboardFromData(await getGlobalLeaderboard("shooting")), {
       fontSize: '10px',
       fill: '#fff',
       align: 'center'
@@ -715,6 +717,9 @@ function showGameOver() {
       localStorage.setItem('highscore_shooting', score);
     }
   }
+  
+  // Update the global leaderboards immediately.
+  updateLeaderboards(game.scene.scenes[0]);
 }
 
 function restartGame(scene) {
