@@ -49,7 +49,7 @@ const modeSettings = {
     maxBlockIncrease: 2,
     threshold: 10
   },
-  shooting: { // Shooting mode uses similar settings to normal.
+  shooting: {
     initialMinBlocks: 1,
     initialMaxBlocks: 5,
     blockSpeedMin: 5,
@@ -76,13 +76,11 @@ let changeNameButton;
 // NEW: Player skin selection variable (values "1", "2", or "3")
 let playerSkin = localStorage.getItem("playerSkin") || "1";
 
-// --- Arrays for obstacle images ---
-// For skins 1 and 2 (usual set)
+// Arrays for obstacle images.
 const usualBlockImages = ['block1', 'block2', 'block3', 'block4', 'block5', 'block6'];
-// For skin 3 (alternative set)
 const altBlockImages = ['blockAlt1', 'blockAlt2', 'blockAlt3', 'blockAlt4', 'blockAlt5', 'blockAlt6'];
 
-// NEW: For Shooting Mode, create a bullet group and timer.
+// For Shooting Mode: bullet group and timer.
 let bullets;
 let bulletTimer = null;
 
@@ -108,7 +106,6 @@ async function promptForUniqueName() {
 
 async function submitScoreFirestore(mode, name, score) {
   try {
-    // Every run is recorded as a new document.
     await db.collection("scores").add({
       mode: mode,
       name: name,
@@ -168,14 +165,19 @@ function preload() {
     this.load.image('blockAlt' + i, 'assets/blockAlt' + i + '.png');
   }
   
-  // Load star image.
+  // Load star images.
   this.load.image('star', 'assets/star.png');
+  this.load.image('starAlt', 'assets/starAlt.png');
   
   this.load.image('gameOverBg', 'assets/game_over_bg.png');
   this.load.image('restartButton', 'assets/restart_button.png');
   
-  // Load bullet asset for Shooting Mode.
+  // Load bullet assets.
   this.load.image('bullet', 'assets/bullet.png');
+  this.load.image('bulletAlt', 'assets/bulletAlt.png');
+  
+  // Load explosion spritesheet.
+  this.load.spritesheet('explosion', 'assets/explosion.png', { frameWidth: 64, frameHeight: 64 });
 }
 
 // -------------------------
@@ -189,11 +191,26 @@ function create() {
   // Create group for obstacles.
   blocks = this.add.group();
   
+  // Create explosion animation.
+  this.anims.create({
+    key: 'explode',
+    frames: this.anims.generateFrameNumbers('explosion', { start: 0, end: 15 }),
+    frameRate: 20,
+    hideOnComplete: true
+  });
+  
   createModeSelectionUI(this);
+  
+  // Immediately force the game to use correct dimensions.
+  this.scale.resize(window.innerWidth, window.innerHeight);
+  this.cameras.main.centerOn(window.innerWidth / 2, window.innerHeight / 2);
+  
+  // Fade in the camera.
+  this.cameras.main.fadeIn(500, 0, 0, 0);
 }
 
 // -------------------------
-// UPDATE FUNCTION (with delta time normalization)
+// UPDATE FUNCTION
 // -------------------------
 function update(time, delta) {
   if (!gameStarted || gameOver) return;
@@ -215,7 +232,7 @@ function update(time, delta) {
   }
   player.x = Phaser.Math.Clamp(player.x, player.width / 2, config.width - player.width / 2);
   
-  // In Shooting Mode, update bullets.
+  // Update bullets in Shooting Mode.
   if (selectedMode === "shooting") {
     updateBullets(dt);
   }
@@ -226,7 +243,7 @@ function update(time, delta) {
     obstacle.y += obstacle.speed * dt;
     
     if (checkCollision(player.getBounds(), obstacle.getBounds())) {
-      if (obstacle.type === "star") {
+      if (obstacle.type === "star" || obstacle.type === "starAlt") {
         score += 10;
         scoreText.setText('Score: ' + score);
         obstacle.destroy();
@@ -235,21 +252,17 @@ function update(time, delta) {
       }
     }
     
-    // In Shooting Mode, if a block reaches the bottom, game over.
- // If the obstacle reaches the bottom:
- if (obstacle.y > config.height) {
-  // Only for blocks in Shooting mode, end the game.
-  if (obstacle.type === "block") {
-    if (selectedMode === "shooting") {
-      showGameOver();
-    } else {
-      score++;
-      scoreText.setText('Score: ' + score);
+    // In Shooting Mode, only blocks cause game over if they reach the bottom.
+    if (obstacle.y > config.height) {
+      obstacle.destroy();
+      if (selectedMode === "shooting" && (obstacle.type === "block")) {
+        showGameOver();
+      } else if (obstacle.type === "block") {
+        score++;
+        scoreText.setText('Score: ' + score);
+      }
     }
-  }
-  obstacle.destroy();
-}
-});
+  });
   
   // Progression logic.
   let threshold = modeSettings[selectedMode].threshold;
@@ -281,10 +294,10 @@ function update(time, delta) {
 // BULLET FUNCTIONS (for Shooting Mode)
 // -------------------------
 function shootBullet() {
-  // Create a bullet at the player's position.
-  let bullet = this.add.image(player.x, player.y - player.height / 2, 'bullet')
+  let bulletTexture = (localStorage.getItem("playerSkin") === "3") ? 'bulletAlt' : 'bullet';
+  let bullet = this.add.image(player.x, player.y - player.height / 2, bulletTexture)
     .setOrigin(0.5);
-  bullet.speed = 60; // Reduced bullet speed.
+  bullet.speed = 60;
   bullets.add(bullet);
 }
 
@@ -296,6 +309,9 @@ function updateBullets(dt) {
     } else {
       blocks.getChildren().forEach(function(obstacle) {
         if (obstacle.type === "block" && checkCollision(bullet.getBounds(), obstacle.getBounds())) {
+          // Create explosion animation.
+          let explosion = bullet.scene.add.sprite(obstacle.x, obstacle.y, 'explosion');
+          explosion.play('explode');
           obstacle.destroy();
           bullet.destroy();
           score += 1;
@@ -310,7 +326,6 @@ function updateBullets(dt) {
 // MODE SELECTION & SKIN SELECTION UI
 // -------------------------
 async function createModeSelectionUI(scene) {
-  // Get stored name; if not, prompt.
   let storedName = localStorage.getItem("playerName");
   if (!storedName) {
     storedName = await promptForUniqueName();
@@ -318,10 +333,8 @@ async function createModeSelectionUI(scene) {
   }
   const currentPlayerName = storedName;
   
-  // Get stored skin; default to "1".
   playerSkin = localStorage.getItem("playerSkin") || "1";
   
-  // Clear previous UI.
   if (gameOverContainer) { gameOverContainer.destroy(); gameOverContainer = null; }
   if (modeContainer) { modeContainer.destroy(); modeContainer = null; }
   
@@ -329,6 +342,7 @@ async function createModeSelectionUI(scene) {
   let personalHighscoreAsian = parseInt(localStorage.getItem('highscore_asian')) || 0;
   let personalHighscoreShooting = parseInt(localStorage.getItem('highscore_shooting')) || 0;
   
+  // Position container centered.
   modeContainer = scene.add.container(config.width / 2, config.height * 0.4);
   modeContainer.setDepth(100);
   
@@ -403,7 +417,6 @@ async function createModeSelectionUI(scene) {
     align: 'center'
   }).setOrigin(0.5);
   
-  // Mode buttons with red background.
   let normalButton = scene.add.text(0, 20, "Normal Mode", {
     fontSize: '24px',
     fill: '#fff',
@@ -427,7 +440,7 @@ async function createModeSelectionUI(scene) {
   
   let personalHighscoreText = scene.add.text(0, 140, 
     `Your Highscore:
-     Normal: ${personalHighscoreNormal}   Asian: ${personalHighscoreAsian}   Shooting: ${personalHighscoreShooting}`, {
+Normal: ${personalHighscoreNormal}   Asian: ${personalHighscoreAsian}   Shooting: ${personalHighscoreShooting}`, {
       fontSize: '14px',
       fill: '#fff',
       align: 'center'
@@ -517,7 +530,6 @@ function setMode(mode) {
   speedMultiplier = 1;
   playerSpeed = 24;
   nextSpeedIncreaseScore = modeSettings[mode].threshold;
-  // For Normal and Shooting, use Normal mode thresholds.
   nextMaxBlocksIncreaseScore = (mode === "normal" || mode === "shooting")
     ? modeSettings.normal.threshold * 2
     : modeSettings[mode].threshold;
@@ -528,7 +540,6 @@ function startGame(scene) {
   if (modeContainer) { modeContainer.destroy(); modeContainer = null; }
   if (changeNameButton) { changeNameButton.destroy(); changeNameButton = null; }
   
-  // Choose player texture based on selected skin.
   let playerTexture = 'player1';
   if (localStorage.getItem("playerSkin") === "2") {
     playerTexture = 'player2';
@@ -549,7 +560,6 @@ function startGame(scene) {
   
   blocks = scene.add.group();
   
-  // If Shooting mode, set up bullet group and timer.
   if (selectedMode === "shooting") {
     bullets = scene.add.group();
     bulletTimer = scene.time.addEvent({
@@ -577,9 +587,10 @@ function startGame(scene) {
 }
 
 function shootBullet() {
-  let bullet = this.add.image(player.x, player.y - player.height / 2, 'bullet')
+  let bulletTexture = (localStorage.getItem("playerSkin") === "3") ? 'bulletAlt' : 'bullet';
+  let bullet = this.add.image(player.x, player.y - player.height / 2, bulletTexture)
     .setOrigin(0.5);
-  bullet.speed = 60; // Bullet speed is reduced.
+  bullet.speed = 60;
   bullets.add(bullet);
 }
 
@@ -591,6 +602,8 @@ function updateBullets(dt) {
     } else {
       blocks.getChildren().forEach(function(obstacle) {
         if (obstacle.type === "block" && checkCollision(bullet.getBounds(), obstacle.getBounds())) {
+          let explosion = bullet.scene.add.sprite(obstacle.x, obstacle.y, 'explosion');
+          explosion.play('explode');
           obstacle.destroy();
           bullet.destroy();
           score += 1;
@@ -601,22 +614,20 @@ function updateBullets(dt) {
   });
 }
 
-// -------------------------
-// SPAWN OBSTACLE FUNCTION
-// -------------------------
 function spawnBlock() {
   if (gameOver) return;
   if (blocks.getLength() < maxBlocks) {
-    let spawnY = 0; // Spawn from the top.
+    let spawnY = 0;
     let isStar = Math.random() < 0.10;
     let obstacle;
     if (isStar) {
+      let starKey = (localStorage.getItem("playerSkin") === "3") ? 'starAlt' : 'star';
       obstacle = this.add.image(
-        Phaser.Math.Between(40, config.width - 40),
+        Phaser.Math.Between(60, config.width - 60),
         spawnY,
-        'star'
+        starKey
       ).setOrigin(0.5).setDisplaySize(40, 40);
-      obstacle.type = "star";
+      obstacle.type = (starKey === 'starAlt') ? "starAlt" : "star";
     } else {
       let textureKey;
       if (localStorage.getItem("playerSkin") === "3") {
@@ -625,7 +636,7 @@ function spawnBlock() {
         textureKey = usualBlockImages[Math.floor(Math.random() * usualBlockImages.length)];
       }
       obstacle = this.add.image(
-        Phaser.Math.Between(40, config.width - 40),
+        Phaser.Math.Between(60, config.width - 60),
         spawnY,
         textureKey
       ).setOrigin(0.5).setDisplaySize(40, 40);
@@ -688,7 +699,7 @@ function showGameOver() {
   let currentName = localStorage.getItem("playerName") || "Guest";
   submitScoreFirestore(selectedMode, currentName, score);
   
-  if (selectedMode === "normal") {
+  if (selectedMode === "normal" || selectedMode === "shooting") {
     let hs = parseInt(localStorage.getItem('highscore_normal')) || 0;
     if (score > hs) {
       localStorage.setItem('highscore_normal', score);
@@ -706,7 +717,6 @@ function showGameOver() {
   }
 }
 
-
 function restartGame(scene) {
   if (spawnTimer) {
     spawnTimer.remove();
@@ -716,19 +726,15 @@ function restartGame(scene) {
     bulletTimer.remove();
     bulletTimer = null;
   }
-  
-  // Clear bullets if any remain.
   if (bullets) {
     bullets.clear(true, true);
   }
-  
   gameOver = false;
   gameStarted = false;
   score = 0;
   speedMultiplier = 1;
   playerSpeed = 24;
   gameOverShown = false;
-  
   if (player) { player.destroy(); player = null; }
   if (scoreText) { scoreText.destroy(); scoreText = null; }
   if (blocks) { blocks.clear(true, true); }
